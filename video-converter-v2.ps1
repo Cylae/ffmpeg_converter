@@ -76,7 +76,7 @@ function Manage-Presets {
     Write-Host "--- Gestion des Préréglages ---" -ForegroundColor Yellow
     Write-Host "Préréglages actuels :"
     foreach ($presetProperty in $global:Presets.PSObject.Properties) {
-        Write-Host "- $($presetProperty.Name): $($presetProperty.Value.description)"
+        Write-Host "- $($presetProperty.Name): $($presetProperty.Value.description)
     }
     # Ici, on ajoutera la logique pour ajouter/supprimer/modifier des préréglages.
 }
