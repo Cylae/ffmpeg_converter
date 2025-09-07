@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>H.265 Converter</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="frame">
+            <h2>Active Sequence</h2>
+            <p id="sequence-name">No active sequence detected.</p>
+        </div>
+
+        <div class="frame">
+            <h2>Encoding Options</h2>
+            <div class="option-group">
+                <input type="radio" id="crf-mode" name="mode" value="crf" checked>
+                <label for="crf-mode">Constant Quality (CRF)</label>
+                <input type="number" id="crf-value" value="23" min="0" max="51">
+            </div>
+            <div class="option-group">
+                <input type="radio" id="cbr-mode" name="mode" value="cbr">
+                <label for="cbr-mode">Constant Bitrate (CBR)</label>
+                <input type="number" id="cbr-value" value="10" min="1">
+                <span>Mbps</span>
+            </div>
+        </div>
+
+        <div class="frame">
+            <button id="start-btn" class="start-button">Start Export</button>
+        </div>
+
+        <div class="frame">
+            <h2>Progress</h2>
+            <progress id="progress-bar" value="0" max="100"></progress>
+            <p id="status-label">Ready.</p>
+        </div>
+    </div>
+
+    <!-- Adobe CEP Libraries -->
+    <script type="text/javascript" src="./CSInterface.js"></script>
+    <!-- Main application script -->
+    <script type="text/javascript" src="main.js"></script>
+</body>
+</html>
