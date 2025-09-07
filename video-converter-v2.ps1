@@ -140,7 +140,6 @@ function Invoke-FFmpegConversion {
     }
 
     $ffmpegArgs += $OutputPath
-
     Write-Host "Starting FFmpeg for '$SourcePath'..." -ForegroundColor Cyan
 
     # Simple call with -y to overwrite. Progress bar will come later.
@@ -179,7 +178,7 @@ function Start-SingleFileConversion {
     }
     $suggestedFileName = "${sourceBaseName}_${selectedPresetName}.${preset.container}"
     $outputPath = Join-Path $outputDir $suggestedFileName
-
+    
     # Overwrite check
     if (Test-Path $outputPath) {
         $overwrite = Read-Host "The output file '$outputPath' already exists. Overwrite? [y/N]"
