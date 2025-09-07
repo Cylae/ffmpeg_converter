@@ -1,6 +1,14 @@
 # 🎬 Advanced Video Converter Suite
 
 This project provides a powerful and user-friendly suite of tools to convert videos to modern, efficient codecs like **H.265 (HEVC)**, **H.264**, and **AV1**. It leverages your system's hardware for accelerated encoding where possible.
+=======
+<div align="center">
+  <p>
+    <b><a href="#-advanced-video-converter-suite-en">English</a></b>
+    &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b><a href="#-suite-de-conversion-vidéo-avancée-fr">Français</a></b>
+  </p>
+</div>
 
 The suite includes:
 1.  **🖥️ A Standalone GUI App:** A feature-rich, cross-platform application for converting batches of video files with advanced options.
@@ -15,7 +23,6 @@ The suite includes:
 -   **Windows:** Download a build from [ffmpeg.org](https://ffmpeg.org/download.html#build-windows) (e.g., from `gyan.dev`) and add the `bin` folder to your system's `PATH` environment variable.
 -   **macOS:** The easiest method is using [Homebrew](https://brew.sh/): `brew install ffmpeg`.
 -   **Linux:** Use your distribution's package manager, e.g., `sudo apt-get install ffmpeg`.
-
 ---
 
 ## 🖥️ 2. Standalone GUI App
@@ -38,7 +45,7 @@ The standalone app provides a robust interface for converting multiple files wit
     ```bash
     python3 standalone_app/app.py
     ```
-
+    
 ### 📋 How to Use
 1.  **Populate the Queue:** Use **"Add File(s)"** or **"Add Folder"** to add videos to the list.
 2.  **Choose Destination:** Click **"Browse..."** to select a folder for the output files.
@@ -65,6 +72,7 @@ The plugin now uses a **real export** process. To work, it **requires a high-qua
 6.  📋 **Copy and Rename:** Copy this `.epr` file, navigate to the plugin's installation directory, and paste it inside the **`/host`** subfolder. Rename the file to exactly **`master_preset.epr`**.
 
 ### 🛠️ How to Install the Plugin
+
 1.  Copy the entire `premiere_pro_plugin` folder into the Adobe CEP `extensions` directory:
     -   **Windows:** `C:\Program Files (x86)\Common Files\Adobe\CEP\extensions\`
     -   **macOS:** `/Library/Application Support/Adobe/CEP/extensions/`
@@ -77,9 +85,7 @@ The plugin now uses a **real export** process. To work, it **requires a high-qua
 5.  Click **"Start Export"**. The plugin will:
     a.  First, export a high-quality master file using your `master_preset.epr`. **This may take time.**
     b.  Second, automatically convert that master file to H.265. The final file will be saved in your project's directory.
-
----
----
+    
 ---
 
 # 🎬 Suite de Conversion Vidéo Avancée
@@ -122,7 +128,7 @@ L'application autonome fournit une interface robuste pour convertir plusieurs fi
     ```bash
     python3 standalone_app/app.py
     ```
-
+    
 ### 📋 Comment Utiliser
 1.  **Remplissez la file d'attente :** Utilisez **"Add File(s)"** ou **"Add Folder"** pour ajouter des vidéos à la liste.
 2.  **Choisissez la Destination :** Cliquez sur **"Browse..."** pour sélectionner un dossier pour les fichiers de sortie.
@@ -149,6 +155,7 @@ Le plugin utilise désormais un **processus d'exportation réel**. Pour fonction
 6.  📋 **Copiez et Renommez :** Copiez ce fichier `.epr`, naviguez jusqu'au répertoire d'installation du plugin, et collez-le dans le sous-dossier **`/host`**. Renommez le fichier en exactement **`master_preset.epr`**.
 
 ### 🛠️ Comment Installer le Plugin
+
 1.  Copiez l'intégralité du dossier `premiere_pro_plugin` dans le répertoire `extensions` d'Adobe CEP :
     -   **Windows :** `C:\Program Files (x86)\Common Files\Adobe\CEP\extensions\`
     -   **macOS :** `/Library/Application Support/Adobe/CEP/extensions/`
