@@ -16,16 +16,12 @@ function getActiveSequenceName() {
 }
 
 /**
- * "Exports" the active sequence to a temporary file.
- * NOTE: This is a placeholder/simulation. The actual app.encoder.encodeSequence()
- * call is commented out because finding a reliable, cross-platform preset path
- * is complex and requires a bundled .epr file, which we don't have yet.
- *
- * This function creates a temporary directory and returns a simulated file path.
- * This allows the rest of the plugin's workflow (JS -> Python) to be built and tested.
+ * Exports the active sequence to a high-quality temporary master file.
+ * This uses a blocking call `exportAsMediaDirect` which is simpler than queuing
+ * a job in Adobe Media Encoder.
  *
  * @returns {string} A JSON string with the result of the operation.
- *                   On success: { success: true, tempFilePath: "path/to/temp_file.mov" }
+ *                   On success: { success: true, tempFilePath: "path/to/temp_file.mov", projectPath: "path/to/project.prproj" }
  *                   On failure: { success: false, message: "Error message" }
  */
 function exportSequenceToTempFile() {
@@ -38,43 +34,48 @@ function exportSequenceToTempFile() {
 
     try {
         var sequence = app.project.activeSequence;
+        var projectPath = app.project.path;
 
-        // Sanitize the sequence name to create a valid filename
-        var sequenceName = sequence.name.replace(/[\\/:"*?<>|]/g, '_');
-
-        // Create a temporary folder for the master file
+        // --- Define Paths ---
+        var sequenceName = sequence.name.replace(/[\\/:"*?<>|]/g, '_'); // Sanitize name
         var tempFolder = new Folder(Folder.temp.fsName + "/h265_converter_temp");
         if (!tempFolder.exists) {
             tempFolder.create();
         }
-
         var tempOutputPath = tempFolder.fsName + "/" + sequenceName + "_master.mov";
 
-        /*
-        // --- THIS IS THE REAL EXPORT CODE THAT IS CURRENTLY STUBBED OUT ---
-        // To make this work, we need a reliable path to a high-quality .epr preset file.
-        // This file should be bundled with the plugin.
-        var presetPath = "path/to/your/bundled/preset.epr";
+        // The preset must be located inside the '/host' folder of the plugin.
+        var extensionPath = $.fileName.split('/').slice(0, -1).join('/');
+        var presetPath = extensionPath + "/master_preset.epr";
+        var presetFile = new File(presetPath);
 
-        app.encoder.launchEncoder(); // Ensure Adobe Media Encoder is running
+        // --- Preset Validation ---
+        if (!presetFile.exists) {
+            var errorMessage = "CRITICAL ERROR: The encoding preset 'master_preset.epr' was not found. " +
+                               "Please create a high-quality 'Apple ProRes' or 'GoPro CineForm' preset in Adobe Media Encoder, " +
+                               "name it 'master_preset.epr', and place it inside the plugin's '/host' directory.";
+            return JSON.stringify({ success: false, message: errorMessage });
+        }
 
-        var jobID = app.encoder.encodeSequence(
-            sequence,
+        // --- Real Export ---
+        // This is a synchronous/blocking call. The script will pause here until the export is complete.
+        sequence.exportAsMediaDirect(
             tempOutputPath,
             presetPath,
-            app.encoder.ENCODE_ENTIRE, // or ENCODE_WORKAREA
-            1 // 1 = remove from queue when done, 0 = keep
+            app.encoder.ENCODE_ENTIRE
         );
 
-        // The real version would need to monitor the job progress.
-        // For now, we just simulate success immediately.
-        */
+        // Check if the output file was actually created
+        var outputFile = new File(tempOutputPath);
+        if (!outputFile.exists) {
+            throw new Error("The export completed, but the master file was not found at the expected path.");
+        }
 
-        // Simulate a successful export and return the path to the theoretical master file.
         return JSON.stringify({
             success: true,
             tempFilePath: tempOutputPath,
-            message: "Premiere Pro is now exporting the master file. The conversion will begin shortly."
+            projectPath: projectPath, // Pass project path for final output location
+            message: "Master file exported successfully. Starting conversion."
         });
 
     } catch (e) {
