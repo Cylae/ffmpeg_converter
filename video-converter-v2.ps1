@@ -381,7 +381,7 @@ function Create-AnimatedGif {
     try {
         # --- Étape 1: Génération de la palette ---
         Write-Host "Étape 1/2: Analyse et génération de la palette de couleurs..." -ForegroundColor Cyan
-        $vfPalette = "fps=$fps,scale=$width:-1:flags=lanczos,palettegen"
+        $vfPalette = "fps=$fps,scale=${width}:-1:flags=lanczos,palettegen"
         $ffmpegPaletteArgs = @('-y', '-ss', $startTime, '-t', $duration, '-i', $SourcePath, '-vf', $vfPalette, $palettePath)
 
         & ffmpeg $ffmpegPaletteArgs
@@ -392,7 +392,7 @@ function Create-AnimatedGif {
 
         # --- Étape 2: Création du GIF avec la palette ---
         Write-Host "Étape 2/2: Création du GIF..." -ForegroundColor Cyan
-        $filterComplex = "fps=$fps,scale=$width:-1:flags=lanczos[x];[x][1:v]paletteuse"
+        $filterComplex = "fps=$fps,scale=${width}:-1:flags=lanczos[x];[x][1:v]paletteuse"
         $ffmpegGifArgs = @('-ss', $startTime, '-t', $duration, '-i', $SourcePath, '-i', $palettePath, '-filter_complex', $filterComplex, $outputPath)
 
         & ffmpeg -y $ffmpegGifArgs
