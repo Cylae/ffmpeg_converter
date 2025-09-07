@@ -1,0 +1,35 @@
+{
+  "Web-1080p-H264": {
+    "description": "Pour une compatibilité maximale sur le web, bonne qualité.",
+    "container": "mp4",
+    "vcodec": "libx264",
+    "crf": 23,
+    "preset": "medium",
+    "acodec": "aac",
+    "abitrate": "192k",
+    "pix_fmt": "yuv420p",
+    "extra_args": "-movflags +faststart"
+  },
+  "Archive-4K-H265": {
+    "description": "Haute qualité pour archivage, utilise H.265 pour une meilleure compression.",
+    "container": "mkv",
+    "vcodec": "libx265",
+    "crf": 18,
+    "preset": "medium",
+    "acodec": "copy",
+    "abitrate": null,
+    "pix_fmt": "yuv420p",
+    "extra_args": ""
+  },
+  "NVENC-H264": {
+    "description": "Encodage matériel NVIDIA H.264 rapide.",
+    "container": "mp4",
+    "vcodec": "h264_nvenc",
+    "cq": 24,
+    "preset": "p6",
+    "acodec": "aac",
+    "abitrate": "192k",
+    "pix_fmt": "yuv420p",
+    "extra_args": "-movflags +faststart"
+  }
+}
