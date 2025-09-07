@@ -60,14 +60,11 @@ window.onload = function () {
                 var res = JSON.parse(result);
                 if (res.success) {
                     statusLabel.textContent = "Step 2/2: Converting master file to H.265...";
-                    // We add a fake delay to simulate the Premiere Pro export time
-                    // In a real implementation, we would monitor the job queue.
-                    setTimeout(function() {
-                        // For the simulation, we need to create a fake master file for the python script to read.
-                        fs.writeFileSync(res.tempFilePath, "This is a dummy file for simulation.");
-                        runFfmpegConversion(res.tempFilePath, res.projectPath);
-                    }, 2000); // 2-second fake export
+                    // The JSX script now blocks until the export is complete, so we can run the conversion immediately.
+                    // No more simulation, fake delays, or fake files.
+                    runFfmpegConversion(res.tempFilePath, res.projectPath);
                 } else {
+                    // Display the detailed error message from the JSX script
                     statusLabel.textContent = "Error: " + res.message;
                     toggleUI(true);
                 }
