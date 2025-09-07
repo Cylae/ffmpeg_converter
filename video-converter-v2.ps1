@@ -1,42 +1,42 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Script de conversion vidéo V2 - Puissant, flexible et extensible.
+    Video Converter Script V2 - Powerful, flexible, and extensible.
 .DESCRIPTION
-    Une réécriture complète du script de conversion vidéo avec des fonctionnalités avancées :
-    - Traitement par lots
-    - Système de préréglages basé sur JSON
-    - Encodage parallèle ("Turbo Mode")
-    - Création de GIFs/Miniatures
-    - Notifications de bureau
+    A complete rewrite of the video conversion script with advanced features:
+    - Batch processing
+    - JSON-based preset system
+    - Parallel encoding ("Turbo Mode")
+    - GIF/Thumbnail creation
+    - Desktop notifications
 #>
 
-# --- Configuration Stricte et Encodage de la Console ---
+# --- Strict Mode and Console Encoding ---
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
-# --- Configuration Globale ---
+# --- Global Configuration ---
 $presetsFile = Join-Path $PSScriptRoot "presets.json"
-# On utilise le scope 'global' pour que les préréglages soient facilement accessibles partout.
+# Using 'global' scope to make presets easily accessible everywhere.
 $global:Presets = @{}
 
 # =================================================================
-# --- FONCTIONS DE GESTION DES PRÉRÉGLAGES ---
+# --- PRESET MANAGEMENT FUNCTIONS ---
 # =================================================================
 
 function Load-Presets {
     if (-not (Test-Path $presetsFile)) {
-        Write-Error "Fichier de préréglages '$presetsFile' introuvable. Créez-le ou placez-le à côté du script."
+        Write-Error "Presets file '$presetsFile' not found. Please create it or place it next to the script."
         return $false
     }
     try {
         $jsonContent = Get-Content $presetsFile -Raw
         $global:Presets = $jsonContent | ConvertFrom-Json
-        Write-Host "Préréglages chargés avec succès." -ForegroundColor Green
+        Write-Host "Presets loaded successfully." -ForegroundColor Green
         return $true
     } catch {
-        Write-Error "Erreur lors de la lecture ou de l'analyse du fichier de préréglages : $($_.Exception.Message)"
+        Write-Error "Error reading or parsing the presets file: $($_.Exception.Message)"
         return $false
     }
 }
@@ -45,14 +45,14 @@ function Save-Presets {
     try {
         $jsonContent = $global:Presets | ConvertTo-Json -Depth 5
         Set-Content -Path $presetsFile -Value $jsonContent
-        Write-Host "Préréglages sauvegardés avec succès." -ForegroundColor Green
+        Write-Host "Presets saved successfully." -ForegroundColor Green
     } catch {
-        Write-Error "Impossible de sauvegarder les préréglages : $($_.Exception.Message)"
+        Write-Error "Could not save presets: $($_.Exception.Message)"
     }
 }
 
 # =================================================================
-# --- FONCTIONS D'INTERFACE UTILISATEUR (UI) ---
+# --- USER INTERFACE (UI) FUNCTIONS ---
 # =================================================================
 
 function Show-MainMenu {
@@ -61,28 +61,28 @@ function Show-MainMenu {
     Write-Host "║           FFMPEG VIDEO CONVERTER PRO V2           ║" -ForegroundColor White
     Write-Host "╚═══════════════════════════════════════════════════╝" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host " [1] Convertir un fichier unique"
-    Write-Host " [2] Convertir un dossier (Mode Turbo)"
-    Write-Host " [3] Créer un GIF ou une miniature"
-    Write-Host " [4] Gérer les préréglages"
+    Write-Host " [1] Convert a single file"
+    Write-Host " [2] Convert a folder (Turbo Mode available)"
+    Write-Host " [3] Create GIF / Thumbnail"
+    Write-Host " [4] Manage Presets"
     Write-Host ""
-    Write-Host " [Q] Quitter"
+    Write-Host " [Q] Quit"
     Write-Host ""
-    return Read-Host "Votre choix"
+    return Read-Host "Your choice"
 }
 
 function Manage-Presets {
-    # Placeholder pour la gestion (créer, supprimer, éditer)
-    Write-Host "--- Gestion des Préréglages ---" -ForegroundColor Yellow
-    Write-Host "Préréglages actuels :"
+    # Placeholder for management (create, delete, edit)
+    Write-Host "--- Preset Management ---" -ForegroundColor Yellow
+    Write-Host "Current presets:"
     foreach ($presetProperty in $global:Presets.PSObject.Properties) {
-        Write-Host "- $($presetProperty.Name): $($presetProperty.Value.description)
+        Write-Host "- $($presetProperty.Name): $($presetProperty.Value.description)"
     }
-    # Ici, on ajoutera la logique pour ajouter/supprimer/modifier des préréglages.
+    # Logic to add/delete/edit presets will be added here.
 }
 
 # =================================================================
-# --- MOTEUR DE CONVERSION ---
+# --- CONVERSION ENGINE ---
 # =================================================================
 
 function Show-PresetSelectionMenu {
@@ -92,7 +92,7 @@ function Show-PresetSelectionMenu {
     )
 
     Clear-Host
-    Write-Host "--- Choix du Préréglage ---" -ForegroundColor Yellow
+    Write-Host "--- Preset Selection ---" -ForegroundColor Yellow
     $presetNames = @($Presets.Keys) | Sort-Object
     for ($i = 0; $i -lt $presetNames.Count; $i++) {
         $name = $presetNames[$i]
@@ -102,14 +102,14 @@ function Show-PresetSelectionMenu {
     Write-Host ""
 
     do {
-        $input = Read-Host "Choisissez un préréglage (1-$($presetNames.Count))"
+        $input = Read-Host "Choose a preset (1-$($presetNames.Count))"
         try {
             $selection = [int]$input
             if ($selection -ge 1 -and $selection -le $presetNames.Count) {
                 return $presetNames[$selection - 1]
             }
         } catch {}
-        Write-Warning "Veuillez entrer un nombre valide."
+        Write-Warning "Please enter a valid number."
     } while ($true)
 }
 
@@ -140,102 +140,101 @@ function Invoke-FFmpegConversion {
     }
 
     $ffmpegArgs += $OutputPath
+    Write-Host "Starting FFmpeg for '$SourcePath'..." -ForegroundColor Cyan
 
-    Write-Host "Lancement de FFmpeg pour '$SourcePath'..." -ForegroundColor Cyan
-
-    # Appel simple avec -y pour écraser. La barre de progression viendra plus tard.
+    # Simple call with -y to overwrite. Progress bar will come later.
     & ffmpeg -y $ffmpegArgs | Out-Null
 
     if($LASTEXITCODE -eq 0) {
-        Write-Host "Conversion de '$SourcePath' terminée avec succès !" -ForegroundColor Green
+        Write-Host "Conversion of '$SourcePath' completed successfully!" -ForegroundColor Green
         return $true
     } else {
-        Write-Error "FFmpeg a rencontré une erreur sur '$SourcePath'. Code de sortie : $LASTEXITCODE"
+        Write-Error "FFmpeg encountered an error on '$SourcePath'. Exit code: $LASTEXITCODE"
         return $false
     }
 }
 
 function Start-SingleFileConversion {
-    Write-Host "--- Conversion de Fichier Unique ---" -ForegroundColor Yellow
+    Write-Host "--- Single File Conversion ---" -ForegroundColor Yellow
 
-    # 1. Sélection du fichier source
-    $sourcePath = Read-Host "Veuillez glisser-déposer le fichier vidéo ici, ou coller le chemin complet"
+    # 1. Select source file
+    $sourcePath = Read-Host "Please drag and drop the video file here, or paste the full path"
     if (-not (Test-Path $sourcePath -PathType Leaf)) {
-        Write-Error "Fichier introuvable ou ce n'est pas un fichier : '$sourcePath'"
+        Write-Error "File not found or not a file: '$sourcePath'"
         return
     }
 
-    # 2. Sélection du préréglage
+    # 2. Select preset
     $selectedPresetName = Show-PresetSelectionMenu -Presets $global:Presets
     $preset = $global:Presets.($selectedPresetName)
 
-    # 3. Gestion du fichier de sortie
+    # 3. Manage output file
     $sourceDir = [System.IO.Path]::GetDirectoryName($sourcePath)
     $sourceBaseName = [System.IO.Path]::GetFileNameWithoutExtension($sourcePath)
     $outputDir = Join-Path $sourceDir "converted"
     if (-not (Test-Path $outputDir)) {
-        Write-Host "Création du dossier de sortie : $outputDir"
+        Write-Host "Creating output directory: $outputDir"
         New-Item -Path $outputDir -ItemType Directory | Out-Null
     }
     $suggestedFileName = "${sourceBaseName}_${selectedPresetName}.${preset.container}"
     $outputPath = Join-Path $outputDir $suggestedFileName
-
-    # Vérification de l'écrasement
+    
+    # Overwrite check
     if (Test-Path $outputPath) {
-        $overwrite = Read-Host "Le fichier de sortie '$outputPath' existe déjà. L'écraser? [o/N]"
-        if ($overwrite.ToLower() -ne 'o') {
-            Write-Host "Conversion annulée." -ForegroundColor Red
+        $overwrite = Read-Host "The output file '$outputPath' already exists. Overwrite? [y/N]"
+        if ($overwrite.ToLower() -ne 'y') {
+            Write-Host "Conversion cancelled." -ForegroundColor Red
             return
         }
     }
-    Write-Host "Le fichier sera sauvegardé ici : $outputPath" -ForegroundColor Cyan
+    Write-Host "File will be saved at: $outputPath" -ForegroundColor Cyan
 
-    # 4. Appel du moteur de conversion
+    # 4. Call the conversion engine
     if (Invoke-FFmpegConversion -SourcePath $sourcePath -OutputPath $outputPath -Preset $preset) {
-        Show-ToastNotification -Title "Conversion Terminée" -Message "'$([System.IO.Path]::GetFileName($outputPath))' a été créé avec succès."
+        Show-ToastNotification -Title "Conversion Complete" -Message "'$([System.IO.Path]::GetFileName($outputPath))' was created successfully."
     }
 }
 
 function Start-BatchConversion {
-    Write-Host "--- Conversion par Lots (Dossier) ---" -ForegroundColor Yellow
+    Write-Host "--- Batch Conversion (Folder) ---" -ForegroundColor Yellow
 
-    # 1. Sélection du dossier source
-    $sourceFolder = Read-Host "Veuillez glisser-déposer le dossier à traiter ici, ou coller le chemin complet"
+    # 1. Select source folder
+    $sourceFolder = Read-Host "Please drag and drop the folder to process here, or paste the full path"
     if (-not (Test-Path $sourceFolder -PathType Container)) {
-        Write-Error "Dossier introuvable ou chemin invalide : '$sourceFolder'"
+        Write-Error "Folder not found or path is invalid: '$sourceFolder'"
         return
     }
 
-    # 2. Trouver les fichiers vidéo
+    # 2. Find video files
     $videoExtensions = @("*.mp4", "*.mkv", "*.mov", "*.m4v", "*.avi", "*.ts", "*.m2ts", "*.webm")
     $filesToConvert = Get-ChildItem -Path $sourceFolder -Include $videoExtensions -Recurse
 
     if (-not $filesToConvert) {
-        Write-Warning "Aucun fichier vidéo trouvé dans le dossier spécifié."
+        Write-Warning "No video files found in the specified folder."
         return
     }
 
-    Write-Host "$($filesToConvert.Count) fichiers vidéo trouvés."
+    Write-Host "$($filesToConvert.Count) video files found."
 
-    # 3. Sélection du préréglage pour le lot
+    # 3. Select preset for the batch
     $selectedPresetName = Show-PresetSelectionMenu -Presets $global:Presets
     $preset = $global:Presets.($selectedPresetName)
 
-    # 4. Boucle de conversion
+    # 4. Conversion loop
     $outputDir = Join-Path $sourceFolder "converted"
     if (-not (Test-Path $outputDir)) {
-        Write-Host "Création du dossier de sortie : $outputDir"
+        Write-Host "Creating output directory: $outputDir"
         New-Item -Path $outputDir -ItemType Directory | Out-Null
     }
 
     $successCount = 0
     $failCount = 0
 
-    $useTurbo = Read-Host "Activer le Mode Turbo (encodage parallèle) ? [o/N]"
-    if ($useTurbo.ToLower() -eq 'o') {
-        # --- Mode Turbo (Parallèle) ---
+    $useTurbo = Read-Host "Enable Turbo Mode (parallel encoding)? [Y/n]"
+    if ($useTurbo.ToLower() -ne 'n') {
+        # --- Turbo Mode (Parallel) ---
         $maxConcurrentJobs = [System.Environment]::ProcessorCount
-        Write-Host "Mode Turbo activé. Lancement de jusqu'à $maxConcurrentJobs conversions en parallèle." -ForegroundColor Green
+        Write-Host "Turbo Mode enabled. Starting up to $maxConcurrentJobs parallel conversions." -ForegroundColor Green
 
         $runningJobs = @()
         $filesQueue = [System.Collections.Generic.Queue[System.IO.FileInfo]]::new($filesToConvert)
@@ -250,7 +249,7 @@ function Start-BatchConversion {
                 $outputPath = Join-Path $outputDir $suggestedFileName
 
                 if ($file.DirectoryName -eq $outputDir) {
-                    Write-Warning "Le fichier '$($file.Name)' est déjà dans le dossier de sortie. Ignoré."
+                    Write-Warning "File '$($file.Name)' is already in the output directory. Skipping."
                     $processedCount++
                     continue
                 }
@@ -270,34 +269,34 @@ function Start-BatchConversion {
                 $job = Start-Job -ScriptBlock $scriptBlock -ArgumentList $file.FullName, $outputPath, $preset
                 $job.Name = $file.Name
                 $runningJobs += $job
-                Write-Host "Lancement de la conversion pour $($job.Name)..."
+                Write-Host "Starting conversion for $($job.Name)..."
             }
 
             $finishedJob = Wait-Job -Job $runningJobs -Any
             $jobResult = Receive-Job -Job $finishedJob
 
             $processedCount++
-            Write-Host "($processedCount/$totalFiles) Tâche terminée pour '$($finishedJob.Name)'." -ForegroundColor Gray
+            Write-Host "($processedCount/$totalFiles) Task finished for '$($finishedJob.Name)'." -ForegroundColor Gray
 
-            if ($jobResult.Success) { $successCount++ } else { $failCount++; Write-Warning "La conversion de $($jobResult.FileName) a échoué." }
+            if ($jobResult.Success) { $successCount++ } else { $failCount++; Write-Warning "Conversion of $($jobResult.FileName) failed." }
 
             Remove-Job -Job $finishedJob
             $runningJobs = $runningJobs | Where-Object { $_.Id -ne $finishedJob.Id }
             Start-Sleep -Milliseconds 100
         }
     } else {
-        # --- Mode Séquentiel ---
+        # --- Sequential Mode ---
         for ($i = 0; $i -lt $filesToConvert.Count; $i++) {
             $file = $filesToConvert[$i]
             Write-Host "------------------------------------------------------------"
-            Write-Host "Conversion du fichier $($i+1)/$($filesToConvert.Count): $($file.Name)" -ForegroundColor White
+            Write-Host "Converting file $($i+1)/$($filesToConvert.Count): $($file.Name)" -ForegroundColor White
 
             $sourceBaseName = [System.IO.Path]::GetFileNameWithoutExtension($file.FullName)
             $suggestedFileName = "${sourceBaseName}_${selectedPresetName}.${preset.container}"
             $outputPath = Join-Path $outputDir $suggestedFileName
 
             if ($file.DirectoryName -eq $outputDir) {
-                Write-Warning "Le fichier '$($file.Name)' est déjà dans le dossier de sortie. Il est ignoré."
+                Write-Warning "File '$($file.Name)' is already in the output directory. Skipping."
                 continue
             }
 
@@ -309,28 +308,28 @@ function Start-BatchConversion {
         }
     }
 
-    # --- Résumé ---
+    # --- Summary ---
     Write-Host "------------------------------------------------------------"
-    Write-Host "Traitement par lots terminé." -ForegroundColor Green
-    Write-Host "Succès : $successCount"
-    Write-Host "Échecs : $failCount" -ForegroundColor Red
+    Write-Host "Batch process finished." -ForegroundColor Green
+    Write-Host "Succeeded: $successCount"
+    Write-Host "Failed: $failCount" -ForegroundColor Red
 
-    Show-ToastNotification -Title "Traitement par Lots Terminé" -Message "Succès: $successCount, Échecs: $failCount."
+    Show-ToastNotification -Title "Batch Process Finished" -Message "Succeeded: $successCount, Failed: $failCount."
 }
 
 # =================================================================
-# --- NOTIFICATIONS & FINALISATION ---
+# --- NOTIFICATIONS & FINALIZATION ---
 # =================================================================
 
 function Install-ToastModuleIfMissing {
     if (-not (Get-Module -ListAvailable -Name BurntToast)) {
-        Write-Host "Module 'BurntToast' pour les notifications manquant. Installation..." -ForegroundColor Yellow
+        Write-Host "Module 'BurntToast' for notifications is missing. Installing..." -ForegroundColor Yellow
         try {
             # Force confirmation to avoid prompts in non-interactive environments
             Install-Module -Name BurntToast -Scope CurrentUser -Force -Confirm:$false
-            Write-Host "Module 'BurntToast' installé." -ForegroundColor Green
+            Write-Host "Module 'BurntToast' installed." -ForegroundColor Green
         } catch {
-            Write-Warning "Impossible d'installer 'BurntToast'. Les notifications de bureau seront désactivées."
+            Write-Warning "Could not install 'BurntToast'. Desktop notifications will be disabled."
         }
     }
 }
@@ -347,7 +346,7 @@ function Show-ToastNotification {
 }
 
 # =================================================================
-# --- OUTILS SUPPLÉMENTAIRES ---
+# --- ADDITIONAL TOOLS ---
 # =================================================================
 
 function Create-AnimatedGif {
@@ -357,56 +356,56 @@ function Create-AnimatedGif {
     )
 
     Write-Host ""
-    Write-Host "--- Création de GIF Animé ---"
+    Write-Host "--- Animated GIF Creation ---"
 
-    # --- Collecte des paramètres ---
-    $startTime = Read-Host "Entrez le moment de début (ex: 00:01:23)"
-    if ($startTime -notmatch '^\d{2}:\d{2}:\d{2}(\.\d+)?$') { Write-Error "Format de temps invalide."; return }
+    # --- Parameter Collection ---
+    $startTime = Read-Host "Enter start time (e.g., 00:01:23)"
+    if ($startTime -notmatch '^\d{2}:\d{2}:\d{2}(\.\d+)?$') { Write-Error "Invalid time format."; return }
 
-    $duration = Read-Host "Entrez la durée en secondes (ex: 3.5)"
-    if (-not ([double]::TryParse($duration, [ref]$null))) { Write-Error "Durée invalide. Utilisez un nombre."; return }
+    $duration = Read-Host "Enter duration in seconds (e.g., 3.5)"
+    if (-not ([double]::TryParse($duration, [ref]$null))) { Write-Error "Invalid duration. Use a number."; return }
 
-    $fps = Read-Host "Entrez les images par seconde (ex: 15) [Défaut: 15]"
+    $fps = Read-Host "Enter frames per second (e.g., 15) [Default: 15]"
     if (-not $fps) { $fps = 15 }
 
-    $width = Read-Host "Entrez la largeur en pixels (ex: 480) [Défaut: 480]"
+    $width = Read-Host "Enter width in pixels (e.g., 480) [Default: 480]"
     if (-not $width) { $width = 480 }
 
-    # --- Définition des chemins ---
+    # --- Path Definition ---
     $sourceDir = [System.IO.Path]::GetDirectoryName($SourcePath)
     $sourceBaseName = [System.IO.Path]::GetFileNameWithoutExtension($SourcePath)
     $outputPath = Join-Path $sourceDir "${sourceBaseName}_${startTime.Replace(':', '-')}_${duration}s.gif"
     $palettePath = Join-Path ([System.IO.Path]::GetTempPath()) "palette.png"
 
     try {
-        # --- Étape 1: Génération de la palette ---
-        Write-Host "Étape 1/2: Analyse et génération de la palette de couleurs..." -ForegroundColor Cyan
+        # --- Step 1: Palette Generation ---
+        Write-Host "Step 1/2: Analyzing and generating color palette..." -ForegroundColor Cyan
         $vfPalette = "fps=$fps,scale=${width}:-1:flags=lanczos,palettegen"
         $ffmpegPaletteArgs = @('-y', '-ss', $startTime, '-t', $duration, '-i', $SourcePath, '-vf', $vfPalette, $palettePath)
 
         & ffmpeg $ffmpegPaletteArgs
 
         if ($LASTEXITCODE -ne 0) {
-            throw "FFmpeg a échoué lors de la génération de la palette."
+            throw "FFmpeg failed during palette generation."
         }
 
-        # --- Étape 2: Création du GIF avec la palette ---
-        Write-Host "Étape 2/2: Création du GIF..." -ForegroundColor Cyan
+        # --- Step 2: GIF Creation with Palette ---
+        Write-Host "Step 2/2: Creating GIF using palette..." -ForegroundColor Cyan
         $filterComplex = "fps=$fps,scale=${width}:-1:flags=lanczos[x];[x][1:v]paletteuse"
         $ffmpegGifArgs = @('-ss', $startTime, '-t', $duration, '-i', $SourcePath, '-i', $palettePath, '-filter_complex', $filterComplex, $outputPath)
 
         & ffmpeg -y $ffmpegGifArgs
 
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "GIF créé avec succès !" -ForegroundColor Green
+            Write-Host "GIF created successfully!" -ForegroundColor Green
             Write-Host $outputPath
         } else {
-            throw "FFmpeg a échoué lors de la création du GIF."
+            throw "FFmpeg failed during GIF creation."
         }
     } catch {
         Write-Error $_.Exception.Message
     } finally {
-        # --- Nettoyage ---
+        # --- Cleanup ---
         if (Test-Path $palettePath) {
             Remove-Item $palettePath -ErrorAction SilentlyContinue
         }
@@ -420,13 +419,13 @@ function Create-Thumbnail {
     )
 
     Write-Host ""
-    Write-Host "--- Création de Miniature ---"
-    $timestamp = Read-Host "Entrez le moment pour la capture (ex: 00:01:23) [Défaut: 00:00:10]"
+    Write-Host "--- Thumbnail Creation ---"
+    $timestamp = Read-Host "Enter timestamp for capture (e.g., 00:01:23) [Default: 00:00:10]"
     if (-not $timestamp) { $timestamp = '00:00:10' }
 
-    # Simple validation regex pour le format HH:MM:SS ou HH:MM:SS.ms
+    # Simple regex validation for HH:MM:SS or HH:MM:SS.ms format
     if ($timestamp -notmatch '^\d{2}:\d{2}:\d{2}(\.\d+)?$') {
-        Write-Error "Format de temps invalide. Utilisez HH:MM:SS."
+        Write-Error "Invalid time format. Use HH:MM:SS."
         return
     }
 
@@ -434,74 +433,74 @@ function Create-Thumbnail {
     $sourceBaseName = [System.IO.Path]::GetFileNameWithoutExtension($SourcePath)
     $outputPath = Join-Path $sourceDir "${sourceBaseName}_thumbnail.jpg"
 
-    Write-Host "Création de la miniature vers '$outputPath'..." -ForegroundColor Cyan
+    Write-Host "Creating thumbnail at '$outputPath'..." -ForegroundColor Cyan
 
     $ffmpegArgs = @(
         '-ss', $timestamp,
         '-i', $SourcePath,
         '-vframes', '1',
-        '-q:v', '2', # Qualité JPEG (2-5 est une bonne plage)
+        '-q:v', '2', # JPEG quality (2-5 is a good range)
         $outputPath
     )
 
-    # L'option -y écrase le fichier de sortie sans demander
+    # The -y option overwrites the output file without asking
     & ffmpeg -y $ffmpegArgs | Out-Null
 
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "Miniature créée avec succès !" -ForegroundColor Green
+        Write-Host "Thumbnail created successfully!" -ForegroundColor Green
         Write-Host $outputPath
     } else {
-        Write-Error "FFmpeg a échoué lors de la création de la miniature. Vérifiez que le timestamp est valide."
+        Write-Error "FFmpeg failed during thumbnail creation. Check if the timestamp is valid."
     }
 }
 
 function Start-GifOrThumbnailCreation {
     Clear-Host
-    Write-Host "--- Créateur de GIF / Miniature ---" -ForegroundColor Yellow
+    Write-Host "--- GIF / Thumbnail Creator ---" -ForegroundColor Yellow
 
-    # 1. Sélection du fichier source (déjà fait si on vient d'un autre menu, mais pour un accès direct c'est nécessaire)
-    $sourcePath = Read-Host "Veuillez glisser-déposer le fichier vidéo ici, ou coller le chemin complet"
+    # 1. Select source file
+    $sourcePath = Read-Host "Please drag and drop the video file here, or paste the full path"
     if (-not (Test-Path $sourcePath -PathType Leaf)) {
-        Write-Error "Fichier introuvable ou ce n'est pas un fichier : '$sourcePath'"
+        Write-Error "File not found or not a file: '$sourcePath'"
         return
     }
 
-    # 2. Sub-menu pour le choix de l'action
+    # 2. Sub-menu for action choice
     Write-Host ""
-    Write-Host "Que voulez-vous créer à partir de '$([System.IO.Path]::GetFileName($sourcePath))' ?"
-    Write-Host "[1] Un GIF animé"
-    Write-Host "[2] Une miniature (image fixe)"
-    $choice = Read-Host "Votre choix"
+    Write-Host "What do you want to create from '$([System.IO.Path]::GetFileName($sourcePath))'?"
+    Write-Host "[1] An animated GIF"
+    Write-Host "[2] A still thumbnail"
+    $choice = Read-Host "Your choice"
 
     switch($choice) {
         '1' { Create-AnimatedGif -SourcePath $sourcePath }
         '2' { Create-Thumbnail -SourcePath $sourcePath }
-        default { Write-Warning "Choix invalide." }
+        default { Write-Warning "Invalid choice." }
     }
 }
 
 
 # =================================================================
-# --- SCRIPT PRINCIPAL ---
+# --- MAIN SCRIPT ---
 # =================================================================
 
 function Main {
-    # Vérification des dépendances au démarrage
+    # Dependency check on startup
     if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
-        Write-Error "FFmpeg est introuvable. Veuillez l'installer et l'ajouter au PATH."
-        Read-Host "Appuyez sur Entrée pour quitter."; return
+        Write-Error "FFmpeg was not found. Please install it and add it to your system's PATH."
+        Read-Host "Press Enter to exit."; return
     }
 
     if (-not (Load-Presets)) {
-        Read-Host "Appuyez sur Entrée pour quitter."; return
+        Read-Host "Press Enter to exit."; return
     }
 
-    # Tentative d'installation du module de notifications au premier lancement
+    # Attempt to install notification module on first run
     Install-ToastModuleIfMissing
 
     Start-Sleep -Seconds 1
 
-    # Boucle principale du programme
+    # Main program loop
     while ($true) {
         $choice = Show-MainMenu
 
@@ -510,14 +509,14 @@ function Main {
             '2' { Start-BatchConversion }
             '3' { Start-GifOrThumbnailCreation }
             '4' { Manage-Presets }
-            'Q' { Write-Host "Au revoir !"; return }
-            default { Write-Warning "Choix invalide." }
+            'Q' { Write-Host "Goodbye!"; return }
+            default { Write-Warning "Invalid choice." }
         }
 
         Write-Host ""
-        Read-Host "Appuyez sur Entrée pour revenir au menu principal..."
+        Read-Host "Press Enter to return to the main menu..."
     }
 }
 
-# --- Lancement du script ---
+# --- Script Launch ---
 Main
