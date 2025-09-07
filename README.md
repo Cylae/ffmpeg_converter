@@ -1,7 +1,3 @@
-# 🎬 Advanced Video Converter Suite
-
-This project provides a powerful and user-friendly suite of tools to convert videos to modern, efficient codecs like **H.265 (HEVC)**, **H.264**, and **AV1**. It leverages your system's hardware for accelerated encoding where possible.
-=======
 <div align="center">
   <p>
     <b><a href="#-advanced-video-converter-suite-en">English</a></b>
@@ -10,15 +6,20 @@ This project provides a powerful and user-friendly suite of tools to convert vid
   </p>
 </div>
 
+# 🎬 Advanced Video Converter Suite (EN)
+
+This project provides a powerful and user-friendly suite of tools to convert videos to modern, efficient codecs like **H.265 (HEVC)**, **H.264**, and **AV1**. It leverages your system's hardware for accelerated encoding where possible.
+
 The suite includes:
 1.  **🖥️ A Standalone GUI App:** A feature-rich, cross-platform application for converting batches of video files with advanced options.
 2.  **🔌 A Premiere Pro Plugin:** A panel that integrates directly into Adobe Premiere Pro for one-click sequence conversion.
+3.  **🦾 A PowerShell CLI Tool:** A powerful command-line script for advanced users, featuring batch processing, parallel encoding, and more.
 
 ---
 
 ## ⚙️ 1. Prerequisite: Installing FFmpeg
 
-**Both tools require FFmpeg to be installed on your system and accessible from your system's PATH.** FFmpeg is the core engine that performs the video conversions.
+**All tools require FFmpeg to be installed on your system and accessible from your system's PATH.** FFmpeg is the core engine that performs the video conversions.
 
 -   **Windows:** Download a build from [ffmpeg.org](https://ffmpeg.org/download.html#build-windows) (e.g., from `gyan.dev`) and add the `bin` folder to your system's `PATH` environment variable.
 -   **macOS:** The easiest method is using [Homebrew](https://brew.sh/): `brew install ffmpeg`.
@@ -85,16 +86,49 @@ The plugin now uses a **real export** process. To work, it **requires a high-qua
 5.  Click **"Start Export"**. The plugin will:
     a.  First, export a high-quality master file using your `master_preset.epr`. **This may take time.**
     b.  Second, automatically convert that master file to H.265. The final file will be saved in your project's directory.
-    
+
 ---
 
-# 🎬 Suite de Conversion Vidéo Avancée
+## 🦾 4. PowerShell Command-Line Tool
+
+For users who prefer a powerful, keyboard-driven interface, the suite includes `video-converter-v2.ps1`, a feature-rich command-line tool for advanced conversion tasks.
+
+### ✨ Features
+-   **⌨️ Interactive Menu:** A simple and fast menu-driven interface that runs in any terminal.
+-   **📝 JSON Presets:** Easily define and manage your own encoding settings in the `presets.json` file.
+-   **Single File & Batch Mode:** Convert a single file or an entire folder of videos.
+-   **🚀 Turbo Mode:** When converting a folder, you can enable parallel encoding to process multiple files at once, dramatically speeding up the workflow on multi-core CPUs.
+-   **🖼️ GIF & Thumbnail Creator:** A built-in utility to quickly create a high-quality animated GIF from a video clip or extract a still thumbnail image.
+-   **🔔 Desktop Notifications:** The script provides native desktop notifications on Windows and Linux upon completion of long tasks (requires the `BurntToast` module, which it will try to install).
+
+### ▶️ How to Run
+1.  Ensure you have **PowerShell** (v5.1 or newer) installed.
+2.  Navigate to the project's root directory in your terminal.
+3.  Run the script with:
+    ```bash
+    pwsh ./video-converter-v2.ps1
+    ```
+
+### 📋 How to Use
+1.  Launch the script.
+2.  The main menu will appear. Choose an option:
+    -   **[1] Convert a single file:** You will be prompted to provide a file path and choose a preset.
+    -   **[2] Convert a folder:** You will be prompted for a folder path and a preset. You can then choose to enable "Turbo Mode".
+    -   **[3] Create GIF / Thumbnail:** A sub-menu will guide you through creating a GIF or thumbnail from a source video.
+    -   **[4] Manage Presets:** Lists the currently available presets from `presets.json`.
+3.  Follow the on-screen prompts. All output files are placed in a `converted` sub-directory created within the source folder.
+    
+---
+---
+
+# 🎬 Suite de Conversion Vidéo Avancée (FR)
 
 Ce projet fournit une suite d'outils puissants et conviviaux pour convertir des vidéos vers des codecs modernes et efficaces comme le **H.265 (HEVC)**, **H.264** et **AV1**. Il tire parti du matériel de votre système pour l'encodage accéléré lorsque cela est possible.
 
 La suite inclut :
 1.  **🖥️ Une Application de Bureau Autonome :** Une application multiplateforme riche en fonctionnalités pour convertir des lots de fichiers vidéo avec des options avancées.
 2.  **🔌 Un Plugin Premiere Pro :** Un panneau qui s'intègre directement dans Adobe Premiere Pro pour une conversion en un clic de la séquence active.
+3.  **🦾 Un Outil en Ligne de Commande PowerShell :** Un script puissant pour les utilisateurs avancés, avec traitement par lots, encodage parallèle, et plus encore.
 
 ---
 
@@ -168,3 +202,34 @@ Le plugin utilise désormais un **processus d'exportation réel**. Pour fonction
 5.  Cliquez sur **"Start Export"**. Le plugin va :
     a.  D'abord, exporter un fichier master de haute qualité en utilisant votre `master_preset.epr`. **Cela peut prendre du temps.**
     b.  Ensuite, convertir automatiquement ce fichier master en H.265. Le fichier final sera sauvegardé dans le répertoire de votre projet.
+
+---
+
+## 🦾 4. Outil en Ligne de Commande PowerShell
+
+Pour les utilisateurs qui préfèrent une interface puissante pilotée par le clavier, la suite inclut `video-converter-v2.ps1`, un outil en ligne de commande riche en fonctionnalités pour les tâches de conversion avancées.
+
+### ✨ Fonctionnalités
+-   **⌨️ Menu Interactif :** Une interface simple et rapide via un menu qui s'exécute dans n'importe quel terminal.
+-   **📝 Préréglages JSON :** Définissez et gérez facilement vos propres paramètres d'encodage dans le fichier `presets.json`.
+-   **Fichier Unique & Mode Dossier :** Convertissez un seul fichier ou un dossier entier de vidéos.
+-   **🚀 Mode Turbo :** Lors de la conversion d'un dossier, vous pouvez activer l'encodage parallèle pour traiter plusieurs fichiers à la fois, accélérant considérablement le travail sur les processeurs multi-cœurs.
+-   **🖼️ Créateur de GIF & Miniatures :** Un utilitaire intégré pour créer rapidement un GIF animé de haute qualité à partir d'un clip vidéo ou pour extraire une image fixe (miniature).
+-   **🔔 Notifications de Bureau :** Le script envoie des notifications de bureau natives sur Windows et Linux à la fin des tâches longues (nécessite le module `BurntToast`, qu'il essaiera d'installer).
+
+### ▶️ Comment Lancer
+1.  Assurez-vous que **PowerShell** (v5.1 ou plus récent) est installé.
+2.  Naviguez jusqu'au répertoire racine du projet dans votre terminal.
+3.  Lancez le script avec :
+    ```bash
+    pwsh ./video-converter-v2.ps1
+    ```
+
+### 📋 Comment Utiliser
+1.  Lancez le script.
+2.  Le menu principal apparaîtra. Choisissez une option :
+    -   **[1] Convertir un fichier unique :** Il vous sera demandé de fournir un chemin de fichier et de choisir un préréglage.
+    -   **[2] Convertir un dossier :** Il vous sera demandé un chemin de dossier et un préréglage. Vous pourrez ensuite choisir d'activer le "Mode Turbo".
+    -   **[3] Créer un GIF / Miniature :** Un sous-menu vous guidera pour créer un GIF ou une miniature à partir d'une vidéo source.
+    -   **[4] Gérer les préréglages :** Liste les préréglages actuellement disponibles depuis `presets.json`.
+3.  Suivez les instructions à l'écran. Tous les fichiers de sortie sont placés dans un sous-dossier `converted` créé dans le dossier source.
