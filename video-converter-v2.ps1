@@ -113,6 +113,23 @@ function Show-PresetSelectionMenu {
     } while ($true)
 }
 
+function Get-VideoDuration {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$FilePath
+    )
+    try {
+        $ffprobeArgs = @('-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', $FilePath)
+        $durationString = & ffprobe $ffprobeArgs 2>&1 | Out-String
+        # ffprobe might return nothing or fail for weird files
+        if ([string]::IsNullOrWhiteSpace($durationString)) { return 0 }
+        return [double]::Parse($durationString.Trim(), [System.Globalization.CultureInfo]::InvariantCulture)
+    } catch {
+        Write-Warning "Could not determine video duration for '$FilePath'. Progress percentage will not be available. Error: $($_.Exception.Message)"
+        return 0
+    }
+}
+
 function Invoke-FFmpegConversion {
     param(
         [Parameter(Mandatory=$true)] [string]$SourcePath,
@@ -139,19 +156,75 @@ function Invoke-FFmpegConversion {
         $ffmpegArgs += $Preset.extra_args.Split(' ')
     }
 
-    $ffmpegArgs += $OutputPath
-    Write-Host "Starting FFmpeg for '$SourcePath'..." -ForegroundColor Cyan
+    # Using -progress pipe:1 sends machine-readable output to stdout
+    # Using -v quiet -stats sends the final summary to stderr
+    $ffmpegArgs += @('-y', '-progress', 'pipe:1', '-v', 'quiet', '-stats', $OutputPath)
 
-    # Simple call with -y to overwrite. Progress bar will come later.
-    & ffmpeg -y $ffmpegArgs | Out-Null
+    Write-Host "Starting FFmpeg for '$([System.IO.Path]::GetFileName($SourcePath))'..." -ForegroundColor Cyan
 
-    if($LASTEXITCODE -eq 0) {
-        Write-Host "Conversion of '$SourcePath' completed successfully!" -ForegroundColor Green
-        return $true
-    } else {
-        Write-Error "FFmpeg encountered an error on '$SourcePath'. Exit code: $LASTEXITCODE"
-        return $false
+    $duration = Get-VideoDuration -FilePath $SourcePath
+    $lastErrorLine = ''
+    $success = $false
+
+    try {
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo.FileName = 'ffmpeg'
+        # Powershell's argument list quoting is tricky. This is a reliable way.
+        $process.StartInfo.Arguments = $ffmpegArgs -join ' '
+        $process.StartInfo.UseShellExecute = $false
+        $process.StartInfo.RedirectStandardOutput = $true
+        $process.StartInfo.RedirectStandardError = $true
+        $process.StartInfo.CreateNoWindow = $true
+
+        $progressData = @{}
+        $outputHandler = {
+            param($line)
+            if ($line -eq $null) { return }
+
+            $parts = $line.Split('=')
+            if ($parts.Length -eq 2) {
+                $progressData[$parts[0].Trim()] = $parts[1].Trim()
+            }
+
+            if ($progressData.ContainsKey('out_time_ms') -and $duration -gt 0) {
+                $elapsedUs = [decimal]$progressData['out_time_ms']
+                $percentage = [int](($elapsedUs / ($duration * 1000000)) * 100)
+                $percentage = if ($percentage -gt 100) { 100 } else { $percentage }
+
+                $status = "Progress: $percentage% | Speed: $($progressData.speed)"
+                Write-Progress -Activity "Converting '$([System.IO.Path]::GetFileName($SourcePath))'" -Status $status -PercentComplete $percentage
+            }
+        }
+
+        $errorHandler = { param($line) if ($line) { $global:lastErrorLine = $line } }
+
+        $process.Start() | Out-Null
+
+        # Asynchronously read stdout and stderr
+        $process.OutputDataReceived.Subscribe($outputHandler)
+        $process.ErrorDataReceived.Subscribe($errorHandler)
+        $process.BeginOutputReadLine()
+        $process.BeginErrorReadLine()
+
+        $process.WaitForExit()
+
+        # Finalize progress bar
+        Write-Progress -Activity "Converting '$([System.IO.Path]::GetFileName($SourcePath))'" -Completed
+
+        if ($process.ExitCode -eq 0) {
+            Write-Host "Conversion of '$SourcePath' completed successfully!" -ForegroundColor Green
+            $success = $true
+        } else {
+            Write-Error "FFmpeg encountered an error on '$SourcePath'. Exit code: $($process.ExitCode). Last error: $global:lastErrorLine"
+        }
+    } catch {
+        Write-Error "An exception occurred while running FFmpeg: $($_.Exception.Message)"
+    } finally {
+        # Clean up the event subscriptions
+        $process.OutputDataReceived.RemoveAll()
+        $process.ErrorDataReceived.RemoveAll()
     }
+    return $success
 }
 
 function Start-SingleFileConversion {
@@ -236,53 +309,96 @@ function Start-BatchConversion {
         $maxConcurrentJobs = [System.Environment]::ProcessorCount
         Write-Host "Turbo Mode enabled. Starting up to $maxConcurrentJobs parallel conversions." -ForegroundColor Green
 
-        $runningJobs = @()
+        # Setup temp directory for progress files
+        $progressDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+        New-Item -Path $progressDir -ItemType Directory | Out-Null
+
+        $runningJobs = @{} # Use a hashtable to store job and its metadata
         $filesQueue = [System.Collections.Generic.Queue[System.IO.FileInfo]]::new($filesToConvert)
         $totalFiles = $filesToConvert.Count
         $processedCount = 0
 
-        while ($processedCount -lt $totalFiles) {
-            while ($runningJobs.Count -lt $maxConcurrentJobs -and $filesQueue.Count -gt 0) {
-                $file = $filesQueue.Dequeue()
-                $sourceBaseName = [System.IO.Path]::GetFileNameWithoutExtension($file.FullName)
-                $suggestedFileName = "${sourceBaseName}_${selectedPresetName}.${preset.container}"
-                $outputPath = Join-Path $outputDir $suggestedFileName
+        try {
+            while ($processedCount -lt $totalFiles) {
+                # Start new jobs if there are free slots
+                while ($runningJobs.Count -lt $maxConcurrentJobs -and $filesQueue.Count -gt 0) {
+                    $file = $filesQueue.Dequeue()
+                    $sourceBaseName = [System.IO.Path]::GetFileNameWithoutExtension($file.FullName)
+                    $suggestedFileName = "${sourceBaseName}_${selectedPresetName}.${preset.container}"
+                    $outputPath = Join-Path $outputDir $suggestedFileName
 
-                if ($file.DirectoryName -eq $outputDir) {
-                    Write-Warning "File '$($file.Name)' is already in the output directory. Skipping."
-                    $processedCount++
-                    continue
+                    if ($file.DirectoryName -eq $outputDir) {
+                        Write-Warning "File '$($file.Name)' is already in the output directory. Skipping."
+                        $processedCount++
+                        continue
+                    }
+
+                    $progressFilePath = Join-Path $progressDir "progress-$($file.Name).txt"
+                    $duration = Get-VideoDuration -FilePath $file.FullName
+
+                    $scriptBlock = {
+                        param($sourcePath, $outPath, $currentPreset, $progPath)
+                        $ffmpegArgs = @('-i', $sourcePath, '-c:v', $currentPreset.vcodec, '-preset', $currentPreset.preset, '-pix_fmt', $currentPreset.pix_fmt)
+                        if ($currentPreset.PSObject.Properties['crf']) { $ffmpegArgs += @('-crf', $currentPreset.crf) }
+                        if ($currentPreset.PSObject.Properties['cq']) { $ffmpegArgs += @('-cq', $currentPreset.cq) }
+                        if ($currentPreset.acodec -eq 'copy') { $ffmpegArgs += @('-c:a', 'copy') } else { $ffmpegArgs += @('-c:a', $currentPreset.acodec, '-b:a', $currentPreset.abitrate) }
+                        if ($currentPreset.extra_args) { $ffmpegArgs += $currentPreset.extra_args.Split(' ') }
+                        # Use -progress to write to a file, makes it easy to monitor
+                        $ffmpegArgs += @('-y', '-progress', $progPath, '-v', 'error', $outPath)
+                        & ffmpeg $ffmpegArgs
+                        return @{ Success = ($LASTEXITCODE -eq 0); FileName = $sourcePath }
+                    }
+
+                    $job = Start-Job -ScriptBlock $scriptBlock -ArgumentList $file.FullName, $outputPath, $preset, $progressFilePath
+                    $job.Name = $file.Name
+                    $runningJobs[$job.Id] = @{ Job = $job; ProgressFile = $progressFilePath; Duration = $duration; FileName = $file.Name }
+                    Write-Host "Starting conversion for $($job.Name)..."
                 }
 
-                $scriptBlock = {
-                    param($sourcePath, $outPath, $currentPreset)
-                    $ffmpegArgs = @('-i', $sourcePath, '-c:v', $currentPreset.vcodec, '-preset', $currentPreset.preset, '-pix_fmt', $currentPreset.pix_fmt)
-                    if ($currentPreset.PSObject.Properties['crf']) { $ffmpegArgs += @('-crf', $currentPreset.crf) }
-                    if ($currentPreset.PSObject.Properties['cq']) { $ffmpegArgs += @('-cq', $currentPreset.cq) }
-                    if ($currentPreset.acodec -eq 'copy') { $ffmpegArgs += @('-c:a', 'copy') } else { $ffmpegArgs += @('-c:a', $currentPreset.acodec, '-b:a', $currentPreset.abitrate) }
-                    if ($currentPreset.extra_args) { $ffmpegArgs += $currentPreset.extra_args.Split(' ') }
-                    $ffmpegArgs += $outPath
-                    & ffmpeg -y -v error -stats $ffmpegArgs
-                    return @{ Success = ($LASTEXITCODE -eq 0); FileName = $sourcePath }
+                # Update overall progress
+                Write-Progress -Id 0 -Activity "Batch Conversion (Turbo Mode)" -Status "Completed $processedCount of $totalFiles files." -PercentComplete ($processedCount * 100 / $totalFiles)
+
+                # Update progress for running jobs
+                foreach ($jobInfo in $runningJobs.Values) {
+                    $jobId = $jobInfo.Job.Id
+                    $progressContent = Get-Content $jobInfo.ProgressFile -ErrorAction SilentlyContinue | Select-Object -Last 1
+                    if ($progressContent) {
+                        $progressData = @{}
+                        $progressContent.Split([environment]::NewLine) | ForEach-Object {
+                            $parts = $_.Split('=')
+                            if ($parts.Length -eq 2) { $progressData[$parts[0].Trim()] = $parts[1].Trim() }
+                        }
+
+                        if ($progressData.ContainsKey('out_time_ms') -and $jobInfo.Duration -gt 0) {
+                            $elapsedUs = [decimal]$progressData['out_time_ms']
+                            $percentage = [int](($elapsedUs / ($jobInfo.Duration * 1000000)) * 100)
+                            $percentage = if ($percentage -gt 100) { 100 } else { $percentage }
+                            Write-Progress -Id $jobId -ParentId 0 -Activity "Converting $($jobInfo.FileName)" -Status "Speed: $($progressData.speed)" -PercentComplete $percentage
+                        }
+                    }
                 }
 
-                $job = Start-Job -ScriptBlock $scriptBlock -ArgumentList $file.FullName, $outputPath, $preset
-                $job.Name = $file.Name
-                $runningJobs += $job
-                Write-Host "Starting conversion for $($job.Name)..."
+                # Check for finished jobs without blocking
+                $finishedJob = Get-Job | Where-Object { $_.State -in @('Completed', 'Failed', 'Stopped') -and $runningJobs.ContainsKey($_.Id) }
+                if ($finishedJob) {
+                    foreach ($job in $finishedJob) {
+                        $jobResult = Receive-Job -Job $job
+                        $processedCount++
+                        Write-Host "($processedCount/$totalFiles) Task finished for '$($job.Name)'." -ForegroundColor Gray
+                        if ($jobResult.Success) { $successCount++ } else { $failCount++; Write-Warning "Conversion of $($jobResult.FileName) failed." }
+
+                        Write-Progress -Id $job.Id -Completed # Remove progress bar for finished job
+                        Remove-Job -Job $job
+                        $runningJobs.Remove($job.Id)
+                    }
+                }
+                Start-Sleep -Milliseconds 500
             }
-
-            $finishedJob = Wait-Job -Job $runningJobs -Any
-            $jobResult = Receive-Job -Job $finishedJob
-
-            $processedCount++
-            Write-Host "($processedCount/$totalFiles) Task finished for '$($finishedJob.Name)'." -ForegroundColor Gray
-
-            if ($jobResult.Success) { $successCount++ } else { $failCount++; Write-Warning "Conversion of $($jobResult.FileName) failed." }
-
-            Remove-Job -Job $finishedJob
-            $runningJobs = $runningJobs | Where-Object { $_.Id -ne $finishedJob.Id }
-            Start-Sleep -Milliseconds 100
+        } finally {
+            # Cleanup
+            Write-Progress -Id 0 -Completed
+            Remove-Item -Path $progressDir -Recurse -Force -ErrorAction SilentlyContinue
+            Get-Job | Remove-Job -Force
         }
     } else {
         # --- Sequential Mode ---
