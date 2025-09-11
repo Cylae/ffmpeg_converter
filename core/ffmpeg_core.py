@@ -76,7 +76,6 @@ class FFmpegConverter:
         # --- Input ---
         command.extend(['-i', input_path])
 
-        # The value from the UI (e.g., 'nvenc', 'qsv') needs to be mapped to the correct ffmpeg flag.
         is_hw_encode = 'nvenc' in video_codec or 'qsv' in video_codec or 'videotoolbox' in video_codec
 
         # --- Video Codec ---
