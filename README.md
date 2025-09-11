@@ -56,17 +56,13 @@ The standalone app provides a robust interface for converting multiple files wit
 ### 📦 How to Build an Executable
 For convenience, you can package the standalone application into a single `.exe` file. This allows you to run it on other Windows machines without needing to have Python installed (though FFmpeg is still required).
 
-1.  Ensure you have **Python 3** installed.
-2.  Install the necessary packaging tool:
-    ```bash
-    pip install pyinstaller
-    ```
-3.  Navigate to the project's root directory in your terminal.
-4.  Run the build script:
+1.  Follow the **[Setup instructions for developers](#-setup)** to install Python and the necessary dependencies.
+2.  Navigate to the project's root directory in your terminal.
+3.  Run the build script:
     ```bash
     python3 build.py
     ```
-5.  If successful, the executable will be located in the `/dist` folder, named `Advanced Video Converter.exe`.
+4.  If successful, the executable will be located in the `/dist` folder, named `Advanced Video Converter.exe`.
 
 ---
 
@@ -132,6 +128,26 @@ For users who prefer a powerful, keyboard-driven interface, the suite includes `
     -   **[3] Create GIF / Thumbnail:** A sub-menu will guide you through creating a GIF or thumbnail from a source video.
     -   **[4] Manage Presets:** Lists the currently available presets from `presets.json`.
 3.  Follow the on-screen prompts. All output files are placed in a `converted` sub-directory created within the source folder.
+
+---
+
+## 🧑‍💻 5. For Developers
+
+If you want to contribute to the project, run tests, or build the executables yourself, follow these steps.
+
+### 🛠️ Setup
+1.  Ensure you have **Python 3** and **FFmpeg** installed and available in your system's PATH.
+2.  Clone the repository to your local machine.
+3.  Install the required Python packages for development:
+    ```bash
+    pip install -r requirements-dev.txt
+    ```
+
+### 🧪 Running Tests
+The project includes a test suite for the core conversion logic. To run the tests, navigate to the project's root directory and run:
+```bash
+pytest
+```
     
 ---
 ---
@@ -187,17 +203,13 @@ L'application autonome fournit une interface robuste pour convertir plusieurs fi
 ### 📦 Comment Créer un Exécutable
 Pour plus de commodité, vous pouvez empaqueter l'application autonome dans un unique fichier `.exe`. Cela vous permet de l'exécuter sur d'autres machines Windows sans avoir besoin d'installer Python (bien que FFmpeg soit toujours requis).
 
-1.  Assurez-vous que Python 3 est installé.
-2.  Installez l'outil d'empaquetage nécessaire :
-    ```bash
-    pip install pyinstaller
-    ```
-3.  Naviguez jusqu'au répertoire racine du projet dans votre terminal.
-4.  Lancez le script de build :
+1.  Suivez les **[instructions d'installation pour les développeurs](#-installation)** pour installer Python et les dépendances nécessaires.
+2.  Naviguez jusqu'au répertoire racine du projet dans votre terminal.
+3.  Lancez le script de build :
     ```bash
     python3 build.py
     ```
-5.  En cas de succès, l'exécutable se trouvera dans le dossier `/dist` sous le nom `Advanced Video Converter.exe`.
+4.  En cas de succès, l'exécutable se trouvera dans le dossier `/dist` sous le nom `Advanced Video Converter.exe`.
 
 ---
 
@@ -263,3 +275,23 @@ Pour les utilisateurs qui préfèrent une interface puissante pilotée par le cl
     -   **[3] Créer un GIF / Miniature :** Un sous-menu vous guidera pour créer un GIF ou une miniature à partir d'une vidéo source.
     -   **[4] Gérer les préréglages :** Liste les préréglages actuellement disponibles depuis `presets.json`.
 3.  Suivez les instructions à l'écran. Tous les fichiers de sortie sont placés dans un sous-dossier `converted` créé dans le dossier source.
+
+---
+
+## 🧑‍💻 5. Pour les développeurs
+
+Si vous souhaitez contribuer au projet, exécuter les tests ou créer vous-même les exécutables, suivez ces étapes.
+
+### 🛠️ Installation
+1.  Assurez-vous que **Python 3** et **FFmpeg** sont installés et accessibles depuis le PATH de votre système.
+2.  Clonez le dépôt sur votre machine locale.
+3.  Installez les paquets Python requis pour le développement :
+    ```bash
+    pip install -r requirements-dev.txt
+    ```
+
+### 🧪 Exécuter les tests
+Le projet inclut une suite de tests pour la logique de conversion principale. Pour lancer les tests, naviguez jusqu'au répertoire racine du projet et exécutez :
+```bash
+pytest
+```

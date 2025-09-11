@@ -89,8 +89,8 @@ class FFmpegConverter:
         elif quality_mode == 'cbr':
             bitrate = str(quality_value) + 'M'
             command.extend(['-b:v', bitrate, '-minrate', bitrate, '-maxrate', bitrate, '-bufsize', '2M'])
-        elif quality_mode == 'cq': # For NVENC/QSV
-             command.extend(['-rc', 'vbr', '-cq', str(quality_value), '-qmin', str(quality_value), '-qmax', str(quality_value)])
+        elif quality_mode == 'cq': # Constant Quality for NVENC/QSV
+             command.extend(['-rc', 'vbr', '-cq', str(quality_value)])
 
         # Audio Codec
         command.extend(['-c:a', audio_codec])
