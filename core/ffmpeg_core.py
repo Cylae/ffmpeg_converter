@@ -73,26 +73,52 @@ class FFmpegConverter:
         """Builds the FFmpeg command as a list of arguments."""
         command = [self.ffmpeg_path]
 
-        # Hardware Acceleration (before input for some configurations)
-        if hw_accel and hw_accel != 'none':
-            command.extend(['-hwaccel', hw_accel])
+        # --- Hardware Acceleration ---
+        # The value from the UI (e.g., 'nvenc', 'qsv') needs to be mapped to the correct ffmpeg flag.
+        is_hw_encode = 'nvenc' in video_codec or 'qsv' in video_codec or 'videotoolbox' in video_codec
 
-        # Input
+        if hw_accel:
+            # Map UI value to ffmpeg flag
+            if hw_accel == 'nvenc':
+                accel_method = 'cuda'
+            else:
+                accel_method = hw_accel # qsv, videotoolbox are valid
+
+            command.extend(['-hwaccel', accel_method])
+
+            # For performance, keep frames on the GPU if possible
+            if accel_method == 'cuda':
+                command.extend(['-hwaccel_output_format', 'cuda'])
+            elif accel_method == 'qsv':
+                # This plugin may be needed for some QSV operations, especially on Linux
+                command.extend(['-load_plugin', 'hevc_hw'])
+
+        # --- Input ---
         command.extend(['-i', input_path])
 
-        # Video Codec
+        # --- Video Codec ---
         command.extend(['-c:v', video_codec])
 
-        # Video Quality/Bitrate
+        # Add pixel format for hardware encoders to ensure compatibility
+        if is_hw_encode:
+            command.extend(['-pix_fmt', 'yuv420p'])
+
+        # --- Video Quality/Bitrate ---
         if quality_mode == 'crf':
+            # CRF is for software encoders
             command.extend(['-crf', str(quality_value)])
         elif quality_mode == 'cbr':
             bitrate = str(quality_value) + 'M'
-            command.extend(['-b:v', bitrate, '-minrate', bitrate, '-maxrate', bitrate, '-bufsize', '2M'])
-        elif quality_mode == 'cq': # Constant Quality for NVENC/QSV
-             command.extend(['-rc', 'vbr', '-cq', str(quality_value)])
+            # For HW encoders, CBR might need a specific flag
+            if is_hw_encode:
+                 command.extend(['-rc', 'cbr', '-b:v', bitrate, '-minrate', bitrate, '-maxrate', bitrate, '-bufsize', '2M'])
+            else:
+                 command.extend(['-b:v', bitrate, '-minrate', bitrate, '-maxrate', bitrate, '-bufsize', '2M'])
+        elif quality_mode == 'cq':
+            # Constant Quality is used for hardware encoders
+            command.extend(['-rc', 'vbr', '-cq', str(quality_value)])
 
-        # Audio Codec
+        # --- Audio Codec ---
         command.extend(['-c:a', audio_codec])
         if audio_codec != 'copy':
             command.extend(['-b:a', '192k'])

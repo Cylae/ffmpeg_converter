@@ -11,6 +11,181 @@ import re
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core.ffmpeg_core import FFmpegConverter, FFmpegError
 
+class QueueFrame(ttk.LabelFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, text="1. File Queue", padding="10")
+        self.controller = controller
+
+        self.file_listbox = Listbox(self, selectmode=tk.EXTENDED, height=8)
+        self.file_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+
+        queue_btn_frame = ttk.Frame(self)
+        queue_btn_frame.pack(side=tk.LEFT, fill=tk.Y)
+        ttk.Button(queue_btn_frame, text="Add File(s)", command=self.add_files).pack(fill=tk.X, pady=2)
+        ttk.Button(queue_btn_frame, text="Add Folder", command=self.add_folder).pack(fill=tk.X, pady=2)
+        ttk.Button(queue_btn_frame, text="Remove Selected", command=self.remove_selected).pack(fill=tk.X, pady=2)
+        ttk.Button(queue_btn_frame, text="Clear Queue", command=self.clear_queue).pack(fill=tk.X, pady=2)
+
+    def add_files(self):
+        filepaths = filedialog.askopenfilenames(
+            title="Select Video File(s)",
+            filetypes=(("Video Files", "*.mp4 *.mov *.avi *.mkv *.wmv"), ("All files", "*.*"))
+        )
+        for fp in filepaths:
+            if fp not in self.controller.files_to_convert:
+                self.controller.files_to_convert.append(fp)
+                self.file_listbox.insert(tk.END, os.path.basename(fp))
+        self.controller.update_status_from_queue()
+
+    def add_folder(self):
+        folderpath = filedialog.askdirectory(title="Select a Folder")
+        if folderpath:
+            for f in os.listdir(folderpath):
+                if f.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.wmv')):
+                    fp = os.path.join(folderpath, f)
+                    if fp not in self.controller.files_to_convert:
+                        self.controller.files_to_convert.append(fp)
+                        self.file_listbox.insert(tk.END, f)
+        self.controller.update_status_from_queue()
+
+    def remove_selected(self):
+        selected_indices = self.file_listbox.curselection()
+        for i in sorted(selected_indices, reverse=True):
+            del self.controller.files_to_convert[i]
+            self.file_listbox.delete(i)
+        self.controller.update_status_from_queue()
+
+    def clear_queue(self):
+        self.controller.files_to_convert.clear()
+        self.file_listbox.delete(0, tk.END)
+        self.controller.update_status_from_queue()
+
+    def set_state(self, state):
+        for widget in self.winfo_children():
+            try:
+                widget.configure(state=state)
+            except tk.TclError:
+                pass
+
+
+class OutputFrame(ttk.LabelFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, text="2. Output Destination", padding="10")
+        self.controller = controller
+
+        self.output_dir_entry = ttk.Entry(self, textvariable=self.controller.output_dir, state=tk.DISABLED)
+        self.output_dir_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        self.browse_btn = ttk.Button(self, text="Browse...", command=self.select_output_dir)
+        self.browse_btn.pack(side=tk.LEFT)
+
+    def select_output_dir(self):
+        folderpath = filedialog.askdirectory(title="Select Output Directory")
+        if folderpath:
+            self.controller.output_dir.set(folderpath)
+
+    def set_state(self, state):
+        self.browse_btn.configure(state=state)
+
+
+class OptionsFrame(ttk.LabelFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent, text="3. Encoding Options", padding="10")
+        self.controller = controller
+
+        # Aliases for controller's StringVars for cleaner code
+        c = self.controller
+
+        # --- Grid Layout ---
+        self.columnconfigure(1, weight=1)
+        self.columnconfigure(3, weight=1)
+
+        # --- Video Codec ---
+        ttk.Label(self, text="Video Codec:").grid(row=0, column=0, sticky="w")
+        self.codec_combo = ttk.Combobox(self, textvariable=c.video_codec, state="readonly",
+                                        values=["H.265 (libx265)", "H.264 (libx264)", "AV1 (libsvtav1)"])
+        self.codec_combo.grid(row=0, column=1, sticky="ew", padx=5)
+
+        # --- HW Accel ---
+        ttk.Label(self, text="HW Accel:").grid(row=0, column=2, sticky="w", padx=10)
+        self.hw_accel_combo = ttk.Combobox(self, textvariable=c.hw_accel, state="readonly")
+        self.hw_accel_combo.grid(row=0, column=3, sticky="ew", padx=5)
+        self.hw_accel_combo.bind("<<ComboboxSelected>>", self.update_codecs_for_hw_accel)
+
+        # --- Quality Mode ---
+        ttk.Label(self, text="Quality Mode:").grid(row=1, column=0, sticky="w")
+        self.mode_combo = ttk.Combobox(self, textvariable=c.quality_mode, state="readonly", values=["CRF", "CBR"])
+        self.mode_combo.grid(row=1, column=1, sticky="ew", padx=5)
+        self.mode_combo.bind("<<ComboboxSelected>>", self.update_ui_for_mode)
+
+        # --- Quality Value ---
+        self.quality_label = ttk.Label(self, text="CRF Value (18-28):")
+        self.quality_label.grid(row=1, column=2, sticky="w", padx=10)
+        self.quality_entry = ttk.Entry(self, textvariable=c.quality_value, width=10)
+        self.quality_entry.grid(row=1, column=3, sticky="w")
+
+        # --- Audio Codec ---
+        ttk.Label(self, text="Audio Codec:").grid(row=2, column=0, sticky="w")
+        self.audio_combo = ttk.Combobox(self, textvariable=c.audio_codec, state="readonly",
+                                        values=["Copy", "AAC (192k)"])
+        self.audio_combo.grid(row=2, column=1, sticky="ew", padx=5)
+
+        # Set initial state
+        self.update_ui_for_mode()
+
+    def update_ui_for_mode(self, event=None):
+        mode = self.controller.quality_mode.get()
+        if mode == "CRF":
+            self.quality_label.config(text="CRF Value (18-28):")
+            self.controller.quality_value.set("23")
+        elif mode == "CBR":
+            self.quality_label.config(text="Bitrate (Mbps):")
+            self.controller.quality_value.set("10")
+        elif mode == "CQ":
+            self.quality_label.config(text="CQ Value (0-51):")
+            self.controller.quality_value.set("24")
+
+    def update_codecs_for_hw_accel(self, event=None):
+        selected_hw = self.controller.hw_accel.get()
+        new_codecs = []
+        new_modes = []
+
+        if "None" in selected_hw:
+            new_codecs = ["H.265 (libx265)", "H.264 (libx264)", "AV1 (libsvtav1)"]
+            new_modes = ["CRF", "CBR"]
+        else:
+            new_modes = ["CQ", "CBR"]
+            available = self.controller.available_encoders
+            if "NVIDIA" in selected_hw:
+                if "hevc_nvenc" in available: new_codecs.append("H.265 (hevc_nvenc)")
+                if "h264_nvenc" in available: new_codecs.append("H.264 (h264_nvenc)")
+            elif "Intel" in selected_hw:
+                if "hevc_qsv" in available: new_codecs.append("H.265 (hevc_qsv)")
+                if "h264_qsv" in available: new_codecs.append("H.264 (h264_qsv)")
+            elif "Apple" in selected_hw:
+                if "hevc_videotoolbox" in available: new_codecs.append("H.265 (hevc_videotoolbox)")
+                if "h264_videotoolbox" in available: new_codecs.append("H.264 (h264_videotoolbox)")
+
+        if new_codecs:
+            self.codec_combo['values'] = new_codecs
+            self.controller.video_codec.set(new_codecs[0])
+        else:
+            self.codec_combo['values'] = ["H.265 (libx265)", "H.264 (libx264)"]
+            self.controller.video_codec.set("H.265 (libx265)")
+
+        self.mode_combo['values'] = new_modes
+        self.controller.quality_mode.set(new_modes[0])
+        self.update_ui_for_mode()
+
+    def set_state(self, state):
+        for widget in self.winfo_children():
+            try:
+                # Don't disable labels
+                if not isinstance(widget, ttk.Label):
+                    widget.configure(state=state)
+            except tk.TclError:
+                pass
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -19,11 +194,22 @@ class App(tk.Tk):
         self.geometry("750x650")
         self.resizable(False, False)
 
+        # --- Core Components ---
         self.converter = FFmpegConverter()
-        self.files_to_convert = []
         self.progress_queue = queue.Queue()
+
+        # --- State Variables ---
+        self.files_to_convert = []
         self.is_converting = False
-        self.available_encoders = [] # To store available encoders
+        self.available_encoders = []
+        self.output_dir = tk.StringVar(value=os.path.expanduser("~"))
+        self.video_codec = tk.StringVar(value="H.265 (libx265)")
+        self.hw_accel = tk.StringVar(value="None")
+        self.quality_mode = tk.StringVar(value="crf")
+        self.quality_value = tk.StringVar(value="23")
+        self.audio_codec = tk.StringVar(value="Copy")
+        self.shutdown_var = tk.BooleanVar()
+        self.status_label_var = tk.StringVar(value="Add files to the queue to begin.")
 
         # --- UI Styling ---
         style = ttk.Style(self)
@@ -36,69 +222,20 @@ class App(tk.Tk):
         main_frame = ttk.Frame(self, padding="15")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # --- File Queue ---
-        queue_frame = ttk.LabelFrame(main_frame, text="1. File Queue", padding="10")
-        queue_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        # --- UI Sections ---
+        self.queue_frame = QueueFrame(main_frame, self)
+        self.queue_frame.pack(fill=tk.BOTH, expand=True, pady=5)
 
-        self.file_listbox = Listbox(queue_frame, selectmode=tk.EXTENDED, height=8)
-        self.file_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        self.output_frame = OutputFrame(main_frame, self)
+        self.output_frame.pack(fill=tk.X, pady=5)
 
-        queue_btn_frame = ttk.Frame(queue_frame)
-        queue_btn_frame.pack(side=tk.LEFT, fill=tk.Y)
-        ttk.Button(queue_btn_frame, text="Add File(s)", command=self.add_files).pack(fill=tk.X, pady=2)
-        ttk.Button(queue_btn_frame, text="Add Folder", command=self.add_folder).pack(fill=tk.X, pady=2)
-        ttk.Button(queue_btn_frame, text="Remove Selected", command=self.remove_selected).pack(fill=tk.X, pady=2)
-        ttk.Button(queue_btn_frame, text="Clear Queue", command=self.clear_queue).pack(fill=tk.X, pady=2)
+        self.options_frame = OptionsFrame(main_frame, self)
+        self.options_frame.pack(fill=tk.X, pady=5)
 
-        # --- Output Directory ---
-        output_frame = ttk.LabelFrame(main_frame, text="2. Output Destination", padding="10")
-        output_frame.pack(fill=tk.X, pady=5)
-        self.output_dir = tk.StringVar(value=os.path.expanduser("~"))
-        ttk.Entry(output_frame, textvariable=self.output_dir, state=tk.DISABLED).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
-        self.browse_btn = ttk.Button(output_frame, text="Browse...", command=self.select_output_dir)
-        self.browse_btn.pack(side=tk.LEFT)
-
-        # --- Encoding Options ---
-        options_frame = ttk.LabelFrame(main_frame, text="3. Encoding Options", padding="10")
-        options_frame.pack(fill=tk.X, pady=5)
-
-        # Codec, HW Accel, Mode, Quality
-        ttk.Label(options_frame, text="Video Codec:").grid(row=0, column=0, sticky="w")
-        self.video_codec = tk.StringVar(value="H.265 (libx265)")
-        self.codec_combo = ttk.Combobox(options_frame, textvariable=self.video_codec, state="readonly", values=["H.265 (libx265)", "H.264 (libx264)", "AV1 (libsvtav1)"])
-        self.codec_combo.grid(row=0, column=1, sticky="ew", padx=5)
-
-        ttk.Label(options_frame, text="HW Accel:").grid(row=0, column=2, sticky="w", padx=10)
-        self.hw_accel = tk.StringVar(value="None")
-        self.hw_accel_combo = ttk.Combobox(options_frame, textvariable=self.hw_accel, state="readonly")
-        self.hw_accel_combo.grid(row=0, column=3, sticky="ew", padx=5)
-        self.hw_accel_combo.bind("<<ComboboxSelected>>", self.update_codecs_for_hw_accel)
-
-        ttk.Label(options_frame, text="Quality Mode:").grid(row=1, column=0, sticky="w")
-        self.quality_mode = tk.StringVar(value="crf")
-        self.mode_combo = ttk.Combobox(options_frame, textvariable=self.quality_mode, state="readonly", values=["CRF", "CBR"])
-        self.mode_combo.grid(row=1, column=1, sticky="ew", padx=5)
-        self.mode_combo.bind("<<ComboboxSelected>>", self.update_ui_for_mode)
-
-        self.quality_label = ttk.Label(options_frame, text="CRF Value (18-28):")
-        self.quality_label.grid(row=1, column=2, sticky="w", padx=10)
-        self.quality_value = tk.StringVar(value="23")
-        self.quality_entry = ttk.Entry(options_frame, textvariable=self.quality_value, width=10)
-        self.quality_entry.grid(row=1, column=3, sticky="w")
-
-        # Audio
-        ttk.Label(options_frame, text="Audio Codec:").grid(row=2, column=0, sticky="w")
-        self.audio_codec = tk.StringVar(value="Copy")
-        self.audio_combo = ttk.Combobox(options_frame, textvariable=self.audio_codec, state="readonly", values=["Copy", "AAC (192k)"])
-        self.audio_combo.grid(row=2, column=1, sticky="ew", padx=5)
-        options_frame.columnconfigure(1, weight=1)
-        options_frame.columnconfigure(3, weight=1)
-
-        # --- Start & Progress ---
+        # --- Bottom Frame for Actions & Progress ---
         bottom_frame = ttk.Frame(main_frame)
         bottom_frame.pack(fill=tk.BOTH, expand=True, pady=5)
 
-        self.shutdown_var = tk.BooleanVar()
         self.shutdown_check = ttk.Checkbutton(bottom_frame, text="Shutdown when complete", variable=self.shutdown_var)
         self.shutdown_check.pack(side=tk.LEFT, pady=10)
 
@@ -107,9 +244,9 @@ class App(tk.Tk):
 
         self.progress_bar = ttk.Progressbar(main_frame, orient="horizontal", length=100, mode="determinate")
         self.progress_bar.pack(fill=tk.X, pady=5)
-        self.status_label_var = tk.StringVar(value="Add files to the queue to begin.")
         ttk.Label(main_frame, textvariable=self.status_label_var, wraplength=720).pack(fill=tk.X, pady=5)
 
+        # --- Initial Population and Queue Processing ---
         self.after(100, self.populate_hw_accel)
         self.process_queue()
 
@@ -121,145 +258,22 @@ class App(tk.Tk):
         try:
             self.available_encoders = self.converter.get_available_encoders()
             hw_options = ["None"]
-            if any("nvenc" in e for e in self.available_encoders):
-                hw_options.append("NVIDIA (nvenc)")
-            if any("qsv" in e for e in self.available_encoders):
-                hw_options.append("Intel (qsv)")
-            if any("videotoolbox" in e for e in self.available_encoders):
-                hw_options.append("Apple (videotoolbox)")
+            if any("nvenc" in e for e in self.available_encoders): hw_options.append("NVIDIA (nvenc)")
+            if any("qsv" in e for e in self.available_encoders): hw_options.append("Intel (qsv)")
+            if any("videotoolbox" in e for e in self.available_encoders): hw_options.append("Apple (videotoolbox)")
             self.progress_queue.put(("HW_ACCEL", hw_options))
         except (FFmpegError, FileNotFoundError) as e:
-            self.progress_queue.put(("ERROR", f"Could not find ffmpeg. Please ensure it's installed and in your PATH. Details: {e}"))
-
-
-    def add_files(self):
-        filepaths = filedialog.askopenfilenames(
-            title="Select Video File(s)",
-            filetypes=(("Video Files", "*.mp4 *.mov *.avi *.mkv *.wmv"), ("All files", "*.*"))
-        )
-        for fp in filepaths:
-            if fp not in self.files_to_convert:
-                self.files_to_convert.append(fp)
-                self.file_listbox.insert(tk.END, os.path.basename(fp))
-        self.update_status_from_queue()
-
-    def add_folder(self):
-        folderpath = filedialog.askdirectory(title="Select a Folder")
-        if folderpath:
-            for f in os.listdir(folderpath):
-                if f.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.wmv')):
-                    fp = os.path.join(folderpath, f)
-                    if fp not in self.files_to_convert:
-                        self.files_to_convert.append(fp)
-                        self.file_listbox.insert(tk.END, f)
-        self.update_status_from_queue()
-
-    def remove_selected(self):
-        selected_indices = self.file_listbox.curselection()
-        for i in sorted(selected_indices, reverse=True):
-            del self.files_to_convert[i]
-            self.file_listbox.delete(i)
-        self.update_status_from_queue()
-
-    def clear_queue(self):
-        self.files_to_convert.clear()
-        self.file_listbox.delete(0, tk.END)
-        self.update_status_from_queue()
+            self.progress_queue.put(("ERROR", f"Could not find ffmpeg. Please ensure it's in your PATH. Details: {e}"))
 
     def update_status_from_queue(self):
         if not self.is_converting:
             count = len(self.files_to_convert)
             self.status_label_var.set(f"{count} file(s) in queue.")
 
-    def select_output_dir(self):
-        folderpath = filedialog.askdirectory(title="Select Output Directory")
-        if folderpath:
-            self.output_dir.set(folderpath)
-
-    def update_ui_for_mode(self, event=None):
-        mode = self.quality_mode.get()
-        if mode == "CRF":
-            self.quality_label.config(text="CRF Value (18-28):")
-            self.quality_value.set("23")
-        elif mode == "CBR":
-            self.quality_label.config(text="Bitrate (Mbps):")
-            self.quality_value.set("10")
-        elif mode == "CQ":
-            self.quality_label.config(text="CQ Value (0-51):")
-            self.quality_value.set("24")
-
-    def update_codecs_for_hw_accel(self, event=None):
-        """Dynamically update the list of available codecs and quality modes based on HW accel selection."""
-        selected_hw = self.hw_accel.get()
-        new_codecs = []
-        new_modes = []
-
-        if "None" in selected_hw:
-            new_codecs = ["H.265 (libx265)", "H.264 (libx264)", "AV1 (libsvtav1)"]
-            new_modes = ["CRF", "CBR"]
-        else:
-            # Hardware acceleration is selected
-            new_modes = ["CQ", "CBR"]
-            if "NVIDIA" in selected_hw:
-                if "hevc_nvenc" in self.available_encoders: new_codecs.append("H.265 (hevc_nvenc)")
-                if "h264_nvenc" in self.available_encoders: new_codecs.append("H.264 (h264_nvenc)")
-            elif "Intel" in selected_hw:
-                if "hevc_qsv" in self.available_encoders: new_codecs.append("H.265 (hevc_qsv)")
-                if "h264_qsv" in self.available_encoders: new_codecs.append("H.264 (h264_qsv)")
-            elif "Apple" in selected_hw:
-                if "hevc_videotoolbox" in self.available_encoders: new_codecs.append("H.265 (hevc_videotoolbox)")
-                if "h264_videotoolbox" in self.available_encoders: new_codecs.append("H.264 (h264_videotoolbox)")
-
-        # Update codec dropdown
-        if new_codecs:
-            self.codec_combo['values'] = new_codecs
-            self.video_codec.set(new_codecs[0])
-        else:
-            # Fallback if no specific codecs found for the HW accel
-            self.codec_combo['values'] = ["H.265 (libx265)", "H.264 (libx264)"]
-            self.video_codec.set("H.265 (libx265)")
-
-        # Update quality mode dropdown
-        self.mode_combo['values'] = new_modes
-        self.quality_mode.set(new_modes[0])
-        self.update_ui_for_mode() # Manually trigger a UI update for the label/value
-
-    def update_codecs_for_hw_accel(self, event=None):
-        """Dynamically update the list of available codecs based on HW accel selection."""
-        selected_hw = self.hw_accel.get()
-        new_codecs = []
-
-        if "None" in selected_hw:
-            new_codecs = ["H.265 (libx265)", "H.264 (libx264)", "AV1 (libsvtav1)"]
-        elif "NVIDIA" in selected_hw:
-            if "hevc_nvenc" in self.available_encoders:
-                new_codecs.append("H.265 (hevc_nvenc)")
-            if "h264_nvenc" in self.available_encoders:
-                new_codecs.append("H.264 (h264_nvenc)")
-        elif "Intel" in selected_hw:
-            if "hevc_qsv" in self.available_encoders:
-                new_codecs.append("H.265 (hevc_qsv)")
-            if "h264_qsv" in self.available_encoders:
-                new_codecs.append("H.264 (h264_qsv)")
-        elif "Apple" in selected_hw:
-            if "hevc_videotoolbox" in self.available_encoders:
-                new_codecs.append("H.265 (hevc_videotoolbox)")
-            if "h264_videotoolbox" in self.available_encoders:
-                new_codecs.append("H.264 (h264_videotoolbox)")
-
-        if new_codecs:
-            self.codec_combo['values'] = new_codecs
-            self.video_codec.set(new_codecs[0])
-        else:
-            # Fallback if no specific codecs found for the HW accel
-            self.codec_combo['values'] = ["H.265 (libx265)", "H.264 (libx264)", "AV1 (libsvtav1)"]
-            self.video_codec.set(new_codecs[0])
-
     def start_export(self):
         if not self.files_to_convert:
             messagebox.showerror("Error", "The file queue is empty.")
             return
-
         try:
             quality_val = int(self.quality_value.get())
         except ValueError:
@@ -270,11 +284,9 @@ class App(tk.Tk):
         self.toggle_ui_state(tk.DISABLED)
         self.progress_bar['value'] = 0
 
-        # The codec string can now be e.g. "H.265 (hevc_nvenc)", so we parse it
         codec_selection = self.video_codec.get()
         codec_match = re.search(r'\((\S+)\)', codec_selection)
         video_codec_val = codec_match.group(1) if codec_match else "libx265"
-
 
         conversion_options = {
             'video_codec': video_codec_val,
@@ -294,9 +306,7 @@ class App(tk.Tk):
             try:
                 base, _ = os.path.splitext(os.path.basename(filepath))
                 output_path = os.path.join(options['output_dir'], f"{base}_converted.mp4")
-
                 self.progress_queue.put((-1, f"({i+1}/{total_files}) Converting {base}..."))
-
                 self.converter.convert(
                     filepath, output_path,
                     video_codec=options['video_codec'],
@@ -308,31 +318,25 @@ class App(tk.Tk):
                 )
             except (FFmpegError, FileNotFoundError) as e:
                 self.progress_queue.put(("ERROR", f"ERROR on {os.path.basename(filepath)}: {e}"))
-                break # Stop on first error
+                break
             except Exception as e:
                 self.progress_queue.put(("ERROR", f"An unexpected error occurred: {e}"))
-                break # Stop on first error
+                break
 
-        if options['shutdown']:
+        if not self.progress_queue.full() and options['shutdown']:
             self.progress_queue.put((-1, "All tasks complete! Shutting down in 60 seconds..."))
             self.initiate_shutdown()
-        else:
+        elif not self.progress_queue.full():
             self.progress_queue.put(("DONE", "All tasks complete!"))
 
     def initiate_shutdown(self):
         system = platform.system()
         try:
-            if system == "Windows":
-                os.system("shutdown /s /t 60")
-            elif system == "Darwin" or system == "Linux":
-                # Note: This requires the user to have passwordless sudo for shutdown.
-                # A safer approach would be to just notify the user.
-                os.system("sudo shutdown -h +1")
-            else:
-                self.progress_queue.put(("ERROR", "Shutdown is not supported on this OS."))
+            if system == "Windows": os.system("shutdown /s /t 60")
+            elif system == "Darwin" or system == "Linux": os.system("sudo shutdown -h +1")
+            else: self.progress_queue.put(("ERROR", "Shutdown is not supported on this OS."))
         except Exception as e:
             self.progress_queue.put(("ERROR", f"Failed to initiate shutdown: {e}"))
-
 
     def progress_callback(self, percentage, message):
         self.progress_queue.put((percentage, message))
@@ -353,12 +357,11 @@ class App(tk.Tk):
                     self.status_label_var.set(f"An error occurred: {value}")
                     messagebox.showerror("Error", value)
                 elif tag == "HW_ACCEL":
-                    self.hw_accel_combo['values'] = value
+                    self.options_frame.hw_accel_combo['values'] = value
                     self.status_label_var.set("Ready. Add files to the queue to begin.")
-                else: # Progress update
+                else:
                     percentage, message = tag, value
-                    if percentage > -1:
-                        self.progress_bar['value'] = percentage
+                    if percentage > -1: self.progress_bar['value'] = percentage
                     self.status_label_var.set(message)
         except queue.Empty:
             pass
@@ -366,21 +369,15 @@ class App(tk.Tk):
             self.after(100, self.process_queue)
 
     def toggle_ui_state(self, state):
-        for child in self.winfo_children():
-            # This is a bit aggressive but effective for disabling everything
-            for widget in child.winfo_children():
-                try:
-                    if isinstance(widget, ttk.Frame):
-                         for w in widget.winfo_children(): w.configure(state=state)
-                    else:
-                        widget.configure(state=state)
-                except tk.TclError:
-                    pass # Some widgets like Labels don't have a 'state'
-        # Manually enable/disable what's necessary
+        self.queue_frame.set_state(state)
+        self.output_frame.set_state(state)
+        self.options_frame.set_state(state)
         self.start_btn.config(state=state)
+        self.shutdown_check.config(state=state)
+
         if state == tk.NORMAL:
-            self.update_ui_for_mode()
-            self.status_label_var.set(f"{len(self.files_to_convert)} file(s) in queue.")
+            self.options_frame.update_ui_for_mode()
+            self.update_status_from_queue()
 
 if __name__ == "__main__":
     app = App()
