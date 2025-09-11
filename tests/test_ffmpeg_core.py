@@ -74,19 +74,22 @@ def test_build_command_audio_recode(converter):
     assert '-b:a' in cmd
     assert '192k' in cmd
 
-def test_build_command_hw_accel(converter):
-    """Test 4: Command with hardware acceleration flag."""
-    cmd = converter._build_command('in.mp4', 'out.mp4', 'hevc_nvenc', 'cq', 24, 'copy', 'cuda')
-    assert '-hwaccel' in cmd
-    assert 'cuda' in cmd
+def test_build_command_hw_accel_nvenc(converter):
+    """Test 4: Command with NVIDIA hardware acceleration flags (encoder only)."""
+    # hw_accel for decoding is now removed, but we still check for the encoder and pixel format.
+    cmd = converter._build_command('in.mp4', 'out.mp4', 'hevc_nvenc', 'cq', 24, 'copy', 'nvenc')
+    assert '-hwaccel' not in cmd # Should not be present anymore
+    assert '-pix_fmt' in cmd
+    assert cmd[cmd.index('-pix_fmt') + 1] == 'yuv420p'
     assert 'hevc_nvenc' in cmd
 
 def test_build_command_nvenc_quality(converter):
     """Test 5: Command with NVENC specific quality mode."""
-    cmd = converter._build_command('in.mp4', 'out.mp4', 'hevc_nvenc', 'cq', 24, 'copy', 'cuda')
+    cmd = converter._build_command('in.mp4', 'out.mp4', 'hevc_nvenc', 'cq', 24, 'copy', 'nvenc')
     assert '-rc' in cmd
+    assert cmd[cmd.index('-rc') + 1] == 'vbr'
     assert '-cq' in cmd
-    assert '24' in cmd
+    assert cmd[cmd.index('-cq') + 1] == '24'
 
 def test_get_available_encoders_mocked(converter):
     """Test 6: Parsing of available encoders from mocked ffmpeg output."""

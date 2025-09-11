@@ -73,26 +73,35 @@ class FFmpegConverter:
         """Builds the FFmpeg command as a list of arguments."""
         command = [self.ffmpeg_path]
 
-        # Hardware Acceleration (before input for some configurations)
-        if hw_accel and hw_accel != 'none':
-            command.extend(['-hwaccel', hw_accel])
-
-        # Input
+        # --- Input ---
         command.extend(['-i', input_path])
 
-        # Video Codec
+        # The value from the UI (e.g., 'nvenc', 'qsv') needs to be mapped to the correct ffmpeg flag.
+        is_hw_encode = 'nvenc' in video_codec or 'qsv' in video_codec or 'videotoolbox' in video_codec
+
+        # --- Video Codec ---
         command.extend(['-c:v', video_codec])
 
-        # Video Quality/Bitrate
+        # Add pixel format for hardware encoders to ensure compatibility
+        if is_hw_encode:
+            command.extend(['-pix_fmt', 'yuv420p'])
+
+        # --- Video Quality/Bitrate ---
         if quality_mode == 'crf':
+            # CRF is for software encoders
             command.extend(['-crf', str(quality_value)])
         elif quality_mode == 'cbr':
             bitrate = str(quality_value) + 'M'
-            command.extend(['-b:v', bitrate, '-minrate', bitrate, '-maxrate', bitrate, '-bufsize', '2M'])
-        elif quality_mode == 'cq': # Constant Quality for NVENC/QSV
-             command.extend(['-rc', 'vbr', '-cq', str(quality_value)])
+            # For HW encoders, CBR might need a specific flag
+            if is_hw_encode:
+                 command.extend(['-rc', 'cbr', '-b:v', bitrate, '-minrate', bitrate, '-maxrate', bitrate, '-bufsize', '2M'])
+            else:
+                 command.extend(['-b:v', bitrate, '-minrate', bitrate, '-maxrate', bitrate, '-bufsize', '2M'])
+        elif quality_mode == 'cq':
+            # Constant Quality is used for hardware encoders
+            command.extend(['-rc', 'vbr', '-cq', str(quality_value)])
 
-        # Audio Codec
+        # --- Audio Codec ---
         command.extend(['-c:a', audio_codec])
         if audio_codec != 'copy':
             command.extend(['-b:a', '192k'])
