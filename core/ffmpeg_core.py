@@ -5,6 +5,7 @@ import shlex
 import json
 import sys
 import argparse
+import tempfile
 
 class FFmpegError(Exception):
     """Custom exception for FFmpeg errors."""
@@ -21,8 +22,11 @@ class FFmpegConverter:
         self.ffprobe_path = ffprobe_path
         self._available_encoders = None
 
-    def _run_command(self, command):
-        """Helper to run a command and return its output."""
+    def _run_command(self, command, capture_output=True):
+        """
+        Helper to run a command and handle common errors.
+        If capture_output is False, stdout/stderr will be inherited.
+        """
         try:
             # Set startupinfo for Windows to hide the console window
             startupinfo = None
@@ -31,12 +35,21 @@ class FFmpegConverter:
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                 startupinfo.wShowWindow = subprocess.SW_HIDE
 
-            return subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8', startupinfo=startupinfo)
+            # Using a list of args with subprocess is safer than a single string
+            return subprocess.run(
+                command,
+                capture_output=capture_output,
+                text=True,
+                check=True,
+                encoding='utf-8',
+                startupinfo=startupinfo
+            )
         except FileNotFoundError:
             raise FFmpegError(f"Executable not found: {command[0]}. Please ensure ffmpeg/ffprobe is installed and in your PATH.")
         except subprocess.CalledProcessError as e:
             # The stderr contains the error message from ffmpeg
-            raise FFmpegError(f"Command failed with exit code {e.returncode}:\n{e.stderr.strip()}")
+            error_output = e.stderr.strip() if e.stderr else "No stderr output."
+            raise FFmpegError(f"Command failed with exit code {e.returncode}:\n{error_output}")
 
 
     def get_available_encoders(self, force_rescan=False):
@@ -68,54 +81,97 @@ class FFmpegConverter:
         except (ValueError, TypeError):
             raise FFmpegError(f"Could not parse video duration from ffprobe output: '{result.stdout}'")
 
+    def create_thumbnail(self, input_path, output_path, timestamp='00:00:10'):
+        """Creates a single thumbnail from a video."""
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Input file not found: {input_path}")
+
+        command = [
+            self.ffmpeg_path,
+            '-ss', timestamp,
+            '-i', input_path,
+            '-vframes', '1',
+            '-q:v', '2',  # High-quality JPEG
+            '-y', output_path
+        ]
+        self._run_command(command, capture_output=True)
+        return True
+
+    def create_gif(self, input_path, output_path, start_time, duration, fps=15, width=480):
+        """Creates an animated GIF from a video clip."""
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"Input file not found: {input_path}")
+
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_palette:
+            palette_path = temp_palette.name
+
+        try:
+            # Step 1: Generate the color palette for a high-quality GIF
+            palette_vf = f"fps={fps},scale={width}:-1:flags=lanczos,palettegen"
+            palette_command = [
+                self.ffmpeg_path, '-y',
+                '-ss', start_time,
+                '-t', str(duration),
+                '-i', input_path,
+                '-vf', palette_vf,
+                palette_path
+            ]
+            self._run_command(palette_command, capture_output=True)
+
+            # Step 2: Create the GIF using the generated palette
+            gif_filter_complex = f"fps={fps},scale={width}:-1:flags=lanczos[x];[x][1:v]paletteuse"
+            gif_command = [
+                self.ffmpeg_path, '-y',
+                '-ss', start_time,
+                '-t', str(duration),
+                '-i', input_path,
+                '-i', palette_path,
+                '-filter_complex', gif_filter_complex,
+                output_path
+            ]
+            self._run_command(gif_command, capture_output=True)
+
+        finally:
+            # Clean up the temporary palette file
+            if os.path.exists(palette_path):
+                os.remove(palette_path)
+
+        return True
+
 
     def _build_command(self, input_path, output_path, video_codec, quality_mode, quality_value, audio_codec, hw_accel):
         """Builds the FFmpeg command as a list of arguments."""
-        command = [self.ffmpeg_path]
+        command = [self.ffmpeg_path, '-y']
 
         # --- Hardware Acceleration ---
-        # The value from the UI (e.g., 'nvenc', 'qsv') needs to be mapped to the correct ffmpeg flag.
         is_hw_encode = 'nvenc' in video_codec or 'qsv' in video_codec or 'videotoolbox' in video_codec
-
-        if hw_accel:
-            # Map UI value to ffmpeg flag
+        if hw_accel and hw_accel != 'none':
             if hw_accel == 'nvenc':
                 accel_method = 'cuda'
             else:
-                accel_method = hw_accel # qsv, videotoolbox are valid
-
+                accel_method = hw_accel
             command.extend(['-hwaccel', accel_method])
-
-            # For performance, keep frames on the GPU if possible
             if accel_method == 'cuda':
                 command.extend(['-hwaccel_output_format', 'cuda'])
-            elif accel_method == 'qsv':
-                # This plugin may be needed for some QSV operations, especially on Linux
-                command.extend(['-load_plugin', 'hevc_hw'])
 
         # --- Input ---
         command.extend(['-i', input_path])
 
         # --- Video Codec ---
         command.extend(['-c:v', video_codec])
-
-        # Add pixel format for hardware encoders to ensure compatibility
         if is_hw_encode:
-            command.extend(['-pix_fmt', 'yuv420p'])
+            command.extend(['-pix_fmt', 'yuv420p']) # Common pixel format for compatibility
+        else:
+            # Use a good default preset for software encoding
+            command.extend(['-preset', 'medium'])
 
         # --- Video Quality/Bitrate ---
         if quality_mode == 'crf':
-            # CRF is for software encoders
             command.extend(['-crf', str(quality_value)])
         elif quality_mode == 'cbr':
             bitrate = str(quality_value) + 'M'
-            # For HW encoders, CBR might need a specific flag
-            if is_hw_encode:
-                 command.extend(['-rc', 'cbr', '-b:v', bitrate, '-minrate', bitrate, '-maxrate', bitrate, '-bufsize', '2M'])
-            else:
-                 command.extend(['-b:v', bitrate, '-minrate', bitrate, '-maxrate', bitrate, '-bufsize', '2M'])
+            command.extend(['-b:v', bitrate, '-minrate', bitrate, '-maxrate', bitrate, '-bufsize', '2M'])
         elif quality_mode == 'cq':
-            # Constant Quality is used for hardware encoders
             command.extend(['-rc', 'vbr', '-cq', str(quality_value)])
 
         # --- Audio Codec ---
@@ -123,14 +179,8 @@ class FFmpegConverter:
         if audio_codec != 'copy':
             command.extend(['-b:a', '192k'])
 
-        # Add progress reporting flags
-        # -v quiet -stats: Shows only the final stats line on stderr.
-        # -progress pipe:1: Writes detailed key=value progress to stdout.
-        command.extend(['-v', 'quiet', '-stats'])
-        command.extend(['-progress', 'pipe:1'])
-
-        # Overwrite output and final path
-        command.extend(['-y', output_path])
+        # --- Progress Reporting & Final Output ---
+        command.extend(['-v', 'quiet', '-stats', '-progress', 'pipe:1', output_path])
 
         return command
 
@@ -143,28 +193,19 @@ class FFmpegConverter:
                 hw_accel=None,
                 progress_callback=None):
         """
-        Converts a video file using FFmpeg.
-        :param progress_callback: A function to call with progress updates (percentage, message).
+        Converts a video file using FFmpeg, providing progress updates.
         """
         if not os.path.exists(input_path):
             raise FileNotFoundError(f"Input file not found: {input_path}")
 
-        duration_s = 0
-        try:
-            # ffprobe gives duration in microseconds for some formats, so we get the full format info
-            duration_s = self.get_video_duration(input_path)
-        except FFmpegError as e:
-            if progress_callback:
-                progress_callback(-1, f"Warning: Could not get video duration. Progress percentage will not be available. Error: {e}")
+        duration_s = self.get_video_duration(input_path)
 
         command = self._build_command(
             input_path, output_path, video_codec, quality_mode, quality_value, audio_codec, hw_accel
         )
 
-        # Regex for parsing the final stats line from stderr
         stats_regex = re.compile(r"frame=\s*(\d+).*fps=\s*(\d+\.?\d*).*time=(\S+).*bitrate=\s*(\S+).*speed=\s*(\S+)")
 
-        # Set startupinfo for Windows to hide the console window
         startupinfo = None
         if sys.platform == "win32":
             startupinfo = subprocess.STARTUPINFO()
@@ -182,7 +223,6 @@ class FFmpegConverter:
 
         progress_data = {}
         for line in process.stdout:
-            # Parse key=value progress data from stdout
             parts = line.strip().split('=')
             if len(parts) == 2:
                 progress_data[parts[0]] = parts[1]
@@ -190,23 +230,19 @@ class FFmpegConverter:
             if 'out_time_ms' in progress_data and duration_s > 0:
                 elapsed_ms = int(progress_data['out_time_ms'])
                 percentage = min(100, int((elapsed_ms / (duration_s * 1_000_000))))
-                # Create a human-readable message
                 message = (f"frame={progress_data.get('frame', 'N/A')} | "
                            f"bitrate={progress_data.get('bitrate', 'N/A')} | "
                            f"speed={progress_data.get('speed', 'N/A')}")
                 if progress_callback:
                     progress_callback(percentage, message)
 
-        # Wait for the process to finish and capture the rest of the output
         _, stderr_output = process.communicate()
 
         if process.returncode != 0:
-            # If the process failed, the error is in stderr
             raise FFmpegError(f"FFmpeg failed with return code {process.returncode}:\n{stderr_output.strip()}")
 
         if progress_callback:
             final_stats = "Conversion complete!"
-            # Try to find the final stats line in the stderr output
             match = stats_regex.search(stderr_output)
             if match:
                 final_stats = f"Done! Final stats: time={match.group(3)} bitrate={match.group(4)} speed={match.group(5)}"
@@ -215,56 +251,82 @@ class FFmpegConverter:
         return True
 
 
-# This interface is used by the Premiere Pro plugin
+# --- JSON Progress & Error Reporting ---
+def json_progress_callback(percentage, message):
+    """Formats progress into a JSON string and prints it."""
+    print(json.dumps({"type": "progress", "percentage": percentage, "message": message}))
+
+def print_json_error(e, error_type="error"):
+    """Formats an error message into a JSON string and prints it."""
+    print(json.dumps({"type": error_type, "message": str(e)}))
+    sys.exit(1)
+
+
+# --- Main Command-Line Interface ---
 if __name__ == '__main__':
     # Setup for flushing stdout, required for piping to Node.js
     sys.stdout.reconfigure(line_buffering=True)
 
-    parser = argparse.ArgumentParser(description="FFmpeg Core Converter Wrapper")
-    parser.add_argument("input", help="Input video file")
-    parser.add_argument("output", help="Output video file")
-    parser.add_argument("--mode", required=True, choices=['crf', 'cbr'], help="Quality mode")
-    parser.add_argument("--value", required=True, type=int, help="Quality value (CRF or CBR in Mb)")
-    # Optional arguments for future expansion
-    parser.add_argument("--vcodec", default='libx265', help="Video codec")
-    parser.add_argument("--acodec", default='copy', help="Audio codec")
+    parser = argparse.ArgumentParser(
+        description="FFmpeg Core Wrapper for video conversion, thumbnail, and GIF generation."
+    )
+    subparsers = parser.add_subparsers(dest='command', required=True, help='Available commands')
+
+    # --- Convert Command ---
+    parser_convert = subparsers.add_parser('convert', help='Convert a video file.')
+    parser_convert.add_argument('input', help='Input video file path.')
+    parser_convert.add_argument('output', help='Output video file path.')
+    parser_convert.add_argument('--vcodec', default='libx265', help='Video codec (e.g., libx265, hevc_nvenc).')
+    parser_convert.add_argument('--acodec', default='copy', help='Audio codec (e.g., copy, aac).')
+    parser_convert.add_argument('--mode', required=True, choices=['crf', 'cbr', 'cq'], help='Quality mode.')
+    parser_convert.add_argument('--value', required=True, type=int, help='Quality value (CRF, CBR in Mbps, or CQ).')
+    parser_convert.add_argument('--hwaccel', default='none', help='Hardware acceleration method (e.g., nvenc, qsv).')
+
+    # --- Thumbnail Command ---
+    parser_thumb = subparsers.add_parser('thumbnail', help='Create a thumbnail from a video.')
+    parser_thumb.add_argument('input', help='Input video file path.')
+    parser_thumb.add_argument('output', help='Output thumbnail file path.')
+    parser_thumb.add_argument('--timestamp', default='00:00:10', help='Timestamp for the thumbnail (HH:MM:SS).')
+
+    # --- GIF Command ---
+    parser_gif = subparsers.add_parser('gif', help='Create an animated GIF from a video.')
+    parser_gif.add_argument('input', help='Input video file path.')
+    parser_gif.add_argument('output', help='Output GIF file path.')
+    parser_gif.add_argument('--start', required=True, help='Start time for the GIF (HH:MM:SS).')
+    parser_gif.add_argument('--duration', required=True, type=float, help='Duration of the GIF in seconds.')
+    parser_gif.add_argument('--fps', default=15, type=int, help='Frames per second for the GIF.')
+    parser_gif.add_argument('--width', default=480, type=int, help='Width of the GIF in pixels.')
 
     args = parser.parse_args()
-
-    # --- JSON Progress Callback ---
-    def json_progress_callback(percentage, message):
-        """Formats progress into a JSON string and prints it."""
-        progress = {
-            "type": "progress",
-            "percentage": percentage,
-            "message": message
-        }
-        print(json.dumps(progress))
-
-    # --- Main Execution ---
     converter = FFmpegConverter()
+
     try:
-        converter.convert(
-            args.input,
-            args.output,
-            video_codec=args.vcodec,
-            quality_mode=args.mode,
-            quality_value=args.value,
-            audio_codec=args.acodec,
-            progress_callback=json_progress_callback
-        )
+        if args.command == 'convert':
+            converter.convert(
+                args.input,
+                args.output,
+                video_codec=args.vcodec,
+                quality_mode=args.mode,
+                quality_value=args.value,
+                audio_codec=args.acodec,
+                hw_accel=args.hwaccel,
+                progress_callback=json_progress_callback
+            )
+        elif args.command == 'thumbnail':
+            converter.create_thumbnail(args.input, args.output, timestamp=args.timestamp)
+            print(json.dumps({"type": "success", "message": f"Thumbnail saved to {args.output}"}))
+
+        elif args.command == 'gif':
+            converter.create_gif(
+                args.input, args.output,
+                start_time=args.start,
+                duration=args.duration,
+                fps=args.fps,
+                width=args.width
+            )
+            print(json.dumps({"type": "success", "message": f"GIF saved to {args.output}"}))
+
     except (FFmpegError, FileNotFoundError) as e:
-        error_json = {
-            "type": "error",
-            "message": str(e)
-        }
-        print(json.dumps(error_json))
-        sys.exit(1)
+        print_json_error(e)
     except Exception as e:
-        # Catch any other unexpected errors
-        error_json = {
-            "type": "error",
-            "message": f"An unexpected error occurred: {e}"
-        }
-        print(json.dumps(error_json))
-        sys.exit(1)
+        print_json_error(e, error_type="unexpected_error")

@@ -4,7 +4,6 @@ window.onload = function () {
     // Check if running in a CEP environment
     if (typeof CSInterface === 'undefined') {
         console.log("Not in a CEP environment. Exiting.");
-        // You could show a message to the user here
         document.body.innerHTML = "<h1>Error: This panel must be run inside Adobe Premiere Pro.</h1>";
         return;
     }
@@ -24,7 +23,6 @@ window.onload = function () {
     var cbrValueInput = document.getElementById('cbr-value');
 
     function init() {
-        // Get active sequence name on load
         csInterface.evalScript('getActiveSequenceName()', function (result) {
             if (result) {
                 sequenceNameElem.textContent = result;
@@ -36,12 +34,10 @@ window.onload = function () {
         });
 
         startBtn.addEventListener('click', startExportProcess);
-
-        // Add listeners to radio buttons to toggle disabled state of inputs
         modeRadios.forEach(function(radio) {
             radio.addEventListener('change', updateInputStates);
         });
-        updateInputStates(); // Initial call
+        updateInputStates();
     }
 
     function updateInputStates() {
@@ -52,7 +48,7 @@ window.onload = function () {
 
     function startExportProcess() {
         toggleUI(false);
-        statusLabel.textContent = "Step 1/2: Preparing master file export from Premiere Pro...";
+        statusLabel.textContent = "Step 1/2: Exporting master file from Premiere Pro...";
         progressBar.value = 0;
 
         csInterface.evalScript('exportSequenceToTempFile()', function (result) {
@@ -60,12 +56,9 @@ window.onload = function () {
                 var res = JSON.parse(result);
                 if (res.success) {
                     statusLabel.textContent = "Step 2/2: Converting master file to H.265...";
-                    // The JSX script now blocks until the export is complete, so we can run the conversion immediately.
-                    // No more simulation, fake delays, or fake files.
                     runFfmpegConversion(res.tempFilePath, res.projectPath);
                 } else {
-                    // Display the detailed error message from the JSX script
-                    statusLabel.textContent = "Error: " + res.message;
+                    statusLabel.textContent = "Export Error: " + res.message;
                     toggleUI(true);
                 }
             } catch (e) {
@@ -83,15 +76,21 @@ window.onload = function () {
         var pythonScriptPath = path.resolve(baseDir, '..', 'core', 'ffmpeg_core.py');
         var finalOutputPath = getFinalOutputPath(tempMasterPath, projectPath);
 
+        // --- Updated Arguments for the new core script ---
         var args = [
             pythonScriptPath,
+            'convert',
             tempMasterPath,
             finalOutputPath,
+            '--vcodec', 'libx265', // The panel is for H.265, so this is fixed.
+            '--acodec', 'copy',    // 'copy' is a safe and fast default.
             '--mode', mode,
             '--value', value
+            // hwaccel is not exposed in this simple UI
         ];
 
         var process = nodeProcess.spawn('python3', args);
+        var lastMessage = '';
 
         process.stdout.on('data', function (data) {
             var lines = data.toString().split('\n');
@@ -103,21 +102,24 @@ window.onload = function () {
                             if (update.percentage > -1) {
                                 progressBar.value = update.percentage;
                             }
-                            if (update.message.includes('frame=') || update.message.includes('bitrate=')) {
-                                statusLabel.textContent = `Converting: ${update.message}`;
-                            }
-                        } else if (update.type === 'error') {
+                            statusLabel.textContent = `Converting: ${update.message}`;
+                            lastMessage = update.message; // Store last good message
+                        } else if (update.type === 'error' || update.type === 'unexpected_error') {
                              statusLabel.textContent = `ERROR: ${update.message}`;
+                        } else if (update.type === 'success') {
+                            statusLabel.textContent = update.message;
                         }
                     } catch (e) {
                         console.error("Failed to parse JSON from python script: ", line);
+                        statusLabel.textContent = "An unknown error occurred while parsing script output.";
                     }
                 }
             });
         });
 
-        var stderrOutput = ''; // Variable to accumulate stderr
+        var stderrOutput = '';
         process.stderr.on('data', function (data) {
+            // Stderr is now only for unexpected Python errors, not ffmpeg output
             console.error(`stderr: ${data}`);
             stderrOutput += data.toString();
         });
@@ -125,7 +127,10 @@ window.onload = function () {
         process.on('close', function (code) {
             if (code === 0) {
                 progressBar.value = 100;
-                statusLabel.textContent = 'Conversion complete! Final file saved.';
+                // The final success message should already be set from stdout JSON
+                if (!statusLabel.textContent.toLowerCase().includes('complete')) {
+                    statusLabel.textContent = 'Conversion complete! Final file saved.';
+                }
                 // Clean up the temporary master file
                 try {
                     fs.unlinkSync(tempMasterPath);
@@ -133,12 +138,10 @@ window.onload = function () {
                     console.error("Could not delete temp file: " + e);
                 }
             } else {
-                 // Check if a specific JSON error was already displayed
                  if (!statusLabel.textContent.startsWith('ERROR')) {
-                    var finalErrorMessage = 'ERROR: Conversion script failed.';
+                    var finalErrorMessage = `ERROR: Conversion script exited with code ${code}.`;
                     if (stderrOutput) {
-                        // Prioritize showing stderr if it contains anything
-                        finalErrorMessage = 'ERROR: ' + stderrOutput.trim();
+                        finalErrorMessage += ` Details: ${stderrOutput.trim()}`;
                     }
                     statusLabel.textContent = finalErrorMessage;
                  }
@@ -150,7 +153,9 @@ window.onload = function () {
     function toggleUI(enabled) {
         startBtn.disabled = !enabled;
         modeRadios.forEach(r => r.disabled = !enabled);
-        updateInputStates(); // This will handle the text inputs
+        crfValueInput.disabled = !enabled;
+        cbrValueInput.disabled = !enabled;
+        updateInputStates();
     }
 
     function getSelectedMode() {
@@ -158,10 +163,10 @@ window.onload = function () {
     }
 
     function getFinalOutputPath(tempPath, projectPath) {
-        // If the project is unsaved, projectPath will be undefined.
-        // In that case, save next to the temp file as a fallback.
         var projectDir = projectPath ? path.dirname(projectPath) : path.dirname(tempPath);
-        var sequenceName = path.basename(tempPath, '_master.mov');
+        var sequenceName = path.basename(tempPath, '.mov');
+        // Sanitize the sequence name in case it's the temp master file name
+        sequenceName = sequenceName.replace('_master', '');
         return path.join(projectDir, sequenceName + '_h265.mp4');
     }
 

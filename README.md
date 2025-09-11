@@ -8,12 +8,12 @@
 
 # 🎬 Advanced Video Converter Suite (EN)
 
-This project provides a powerful and user-friendly suite of tools to convert videos to modern, efficient codecs like **H.265 (HEVC)**, **H.264**, and **AV1**. It leverages your system's hardware for accelerated encoding where possible.
+This project provides a powerful and user-friendly suite of tools to convert videos to modern, efficient codecs like **H.265 (HEVC)**, **H.264**, and **AV1**. The entire suite has been recently refactored to be more robust and reliable by centralizing all conversion logic into a core Python engine.
 
 The suite includes:
 1.  **🖥️ A Standalone GUI App:** A feature-rich, cross-platform application for converting batches of video files with advanced options.
 2.  **🔌 A Premiere Pro Plugin:** A panel that integrates directly into Adobe Premiere Pro for one-click sequence conversion.
-3.  **🦾 A PowerShell CLI Tool:** A powerful command-line script for advanced users, featuring batch processing, parallel encoding, and more.
+3.  **🦾 A PowerShell CLI Tool:** A powerful command-line script for advanced users, featuring batch processing, preset management, and more.
 
 ---
 
@@ -35,7 +35,7 @@ The standalone app provides a robust interface for converting multiple files wit
 -   **📂 Custom Destination:** Choose a specific folder for your converted files.
 -   **🎞️ Codec Selection:** Convert to H.265, H.264, or the next-gen AV1 codec.
 -   **🚀 Hardware Acceleration:** Automatically detects and offers hardware encoding (**NVIDIA NVENC**, **Intel QSV**, **Apple VideoToolbox**) if your system and FFmpeg build support it.
--   **📊 Quality Control:** Choose between **Constant Quality (CRF)** for consistent visual quality or **Constant Bitrate (CBR)** for predictable file sizes.
+-   **📊 Quality Control:** Choose between **Constant Quality (CRF/CQ)** for consistent visual quality or **Constant Bitrate (CBR)** for predictable file sizes.
 -   **🔊 Audio Options:** Copy the audio track directly for maximum speed or re-encode it to efficient **AAC**.
 -   **🌙 Shutdown When Complete:** Automatically shut down your computer after the queue is finished.
 
@@ -102,18 +102,17 @@ The plugin now uses a **real export** process. To work, it **requires a high-qua
 
 ## 🦾 4. PowerShell Command-Line Tool
 
-For users who prefer a powerful, keyboard-driven interface, the suite includes `video-converter-v2.ps1`, a feature-rich command-line tool for advanced conversion tasks.
+For users who prefer a powerful, keyboard-driven interface, the suite includes `video-converter-v2.ps1`, a streamlined command-line tool for advanced conversion tasks.
 
 ### ✨ Features
 -   **⌨️ Interactive Menu:** A simple and fast menu-driven interface that runs in any terminal.
 -   **📝 JSON Presets:** Easily define and manage your own encoding settings in the `presets.json` file.
--   **Single File & Batch Mode:** Convert a single file or an entire folder of videos.
--   **🚀 Turbo Mode:** When converting a folder, you can enable parallel encoding to process multiple files at once, dramatically speeding up the workflow on multi-core CPUs.
+-   **Single File & Batch Mode:** Convert a single file or an entire folder of videos sequentially.
 -   **🖼️ GIF & Thumbnail Creator:** A built-in utility to quickly create a high-quality animated GIF from a video clip or extract a still thumbnail image.
--   **🔔 Desktop Notifications:** The script provides native desktop notifications on Windows and Linux upon completion of long tasks (requires the `BurntToast` module, which it will try to install).
+-   **🔔 Desktop Notifications:** The script provides native desktop notifications on Windows upon completion of long tasks (requires the `BurntToast` module, which it will try to install).
 
 ### ▶️ How to Run
-1.  Ensure you have **PowerShell** (v5.1 or newer) installed.
+1.  Ensure you have **Python 3** and **PowerShell** (v5.1 or newer) installed.
 2.  Navigate to the project's root directory in your terminal.
 3.  Run the script with:
     ```bash
@@ -124,9 +123,9 @@ For users who prefer a powerful, keyboard-driven interface, the suite includes `
 1.  Launch the script.
 2.  The main menu will appear. Choose an option:
     -   **[1] Convert a single file:** You will be prompted to provide a file path and choose a preset.
-    -   **[2] Convert a folder:** You will be prompted for a folder path and a preset. You can then choose to enable "Turbo Mode".
+    -   **[2] Convert a folder:** You will be prompted for a folder path and a preset.
     -   **[3] Create GIF / Thumbnail:** A sub-menu will guide you through creating a GIF or thumbnail from a source video.
-    -   **[4] Manage Presets:** Lists the currently available presets from `presets.json`.
+    -   **[4] View Presets:** Displays the currently available presets from `presets.json`.
 3.  Follow the on-screen prompts. All output files are placed in a `converted` sub-directory created within the source folder.
 
 ---
@@ -154,18 +153,18 @@ pytest
 
 # 🎬 Suite de Conversion Vidéo Avancée (FR)
 
-Ce projet fournit une suite d'outils puissants et conviviaux pour convertir des vidéos vers des codecs modernes et efficaces comme le **H.265 (HEVC)**, **H.264** et **AV1**. Il tire parti du matériel de votre système pour l'encodage accéléré lorsque cela est possible.
+Ce projet fournit une suite d'outils puissants et conviviaux pour convertir des vidéos vers des codecs modernes et efficaces comme le **H.265 (HEVC)**, **H.264** et **AV1**. La suite a été récemment refactorisée pour être plus robuste et fiable en centralisant toute la logique de conversion dans un moteur principal en Python.
 
 La suite inclut :
 1.  **🖥️ Une Application de Bureau Autonome :** Une application multiplateforme riche en fonctionnalités pour convertir des lots de fichiers vidéo avec des options avancées.
 2.  **🔌 Un Plugin Premiere Pro :** Un panneau qui s'intègre directement dans Adobe Premiere Pro pour une conversion en un clic de la séquence active.
-3.  **🦾 Un Outil en Ligne de Commande PowerShell :** Un script puissant pour les utilisateurs avancés, avec traitement par lots, encodage parallèle, et plus encore.
+3.  **🦾 Un Outil en Ligne de Commande PowerShell :** Un script puissant pour les utilisateurs avancés, avec traitement par lots, gestion de préréglages, et plus encore.
 
 ---
 
 ## ⚙️ 1. Prérequis : Installation de FFmpeg
 
-**Les deux outils nécessitent que FFmpeg soit installé sur votre système et accessible depuis le PATH.** FFmpeg est le moteur principal qui effectue les conversions vidéo.
+**Tous les outils nécessitent que FFmpeg soit installé sur votre système et accessible depuis le PATH.** FFmpeg est le moteur principal qui effectue les conversions vidéo.
 
 -   **Windows :** Téléchargez une version depuis [ffmpeg.org](https://ffmpeg.org/download.html#build-windows) (par exemple, depuis `gyan.dev`) et ajoutez le dossier `bin` à votre variable d'environnement `PATH`.
 -   **macOS :** La méthode la plus simple est d'utiliser [Homebrew](https://brew.sh/) : `brew install ffmpeg`.
@@ -182,7 +181,7 @@ L'application autonome fournit une interface robuste pour convertir plusieurs fi
 -   **📂 Destination Personnalisée :** Choisissez un dossier spécifique pour vos fichiers convertis.
 -   **🎞️ Sélection du Codec :** Convertissez en H.265, H.264, ou le codec de nouvelle génération AV1.
 -   **🚀 Accélération Matérielle :** Détecte et propose automatiquement l'encodage matériel (**NVIDIA NVENC**, **Intel QSV**, **Apple VideoToolbox**) si votre système et votre version de FFmpeg le supportent.
--   **📊 Contrôle de la Qualité :** Choisissez entre une **Qualité Constante (CRF)** pour une qualité visuelle homogène ou un **Débit Binaire Constant (CBR)** pour des tailles de fichier prévisibles.
+-   **📊 Contrôle de la Qualité :** Choisissez entre une **Qualité Constante (CRF/CQ)** pour une qualité visuelle homogène ou un **Débit Binaire Constant (CBR)** pour des tailles de fichier prévisibles.
 -   **🔊 Options Audio :** Copiez directement la piste audio pour une vitesse maximale ou ré-encodez-la en **AAC**, un format efficace.
 -   **🌙 Éteindre l'ordinateur :** Éteignez automatiquement votre ordinateur une fois la file d'attente terminée.
 
@@ -226,7 +225,7 @@ Le plugin utilise désormais un **processus d'exportation réel**. Pour fonction
 3.  ⚙️ Configurez le préréglage pour un **format intermédiaire de haute qualité** :
     -   **Format :** `QuickTime`
     -   **Codec Vidéo :** `Apple ProRes 422 HQ` ou `GoPro CineForm`. Ces formats sont idéaux pour préserver la qualité avant la conversion finale en H.265. **Ne choisissez pas** H.265 ou H.264 ici.
-4.  💾 Donnez un nom au préréglage (ex: "MonMasterProRes") et cliquez sur `OK`.
+4.  💾 Donnez un nom au préréglage (ex: "MonMasterProRes") and cliquez sur `OK`.
 5.  🔎 **Trouvez le fichier `.epr` :** Faites un clic droit sur votre nouvelle préconfiguration dans l'explorateur et sélectionnez **`Afficher le fichier de préconfiguration`**.
 6.  📋 **Copiez et Renommez :** Copiez ce fichier `.epr`, naviguez jusqu'au répertoire d'installation du plugin, et collez-le dans le sous-dossier **`/host`**. Renommez le fichier en exactement **`master_preset.epr`**.
 
@@ -249,18 +248,17 @@ Le plugin utilise désormais un **processus d'exportation réel**. Pour fonction
 
 ## 🦾 4. Outil en Ligne de Commande PowerShell
 
-Pour les utilisateurs qui préfèrent une interface puissante pilotée par le clavier, la suite inclut `video-converter-v2.ps1`, un outil en ligne de commande riche en fonctionnalités pour les tâches de conversion avancées.
+Pour les utilisateurs qui préfèrent une interface puissante pilotée par le clavier, la suite inclut `video-converter-v2.ps1`, un outil en ligne de commande simplifié pour les tâches de conversion avancées.
 
 ### ✨ Fonctionnalités
 -   **⌨️ Menu Interactif :** Une interface simple et rapide via un menu qui s'exécute dans n'importe quel terminal.
 -   **📝 Préréglages JSON :** Définissez et gérez facilement vos propres paramètres d'encodage dans le fichier `presets.json`.
--   **Fichier Unique & Mode Dossier :** Convertissez un seul fichier ou un dossier entier de vidéos.
--   **🚀 Mode Turbo :** Lors de la conversion d'un dossier, vous pouvez activer l'encodage parallèle pour traiter plusieurs fichiers à la fois, accélérant considérablement le travail sur les processeurs multi-cœurs.
+-   **Fichier Unique & Mode Dossier :** Convertissez un seul fichier ou un dossier entier de vidéos (séquentiellement).
 -   **🖼️ Créateur de GIF & Miniatures :** Un utilitaire intégré pour créer rapidement un GIF animé de haute qualité à partir d'un clip vidéo ou pour extraire une image fixe (miniature).
--   **🔔 Notifications de Bureau :** Le script envoie des notifications de bureau natives sur Windows et Linux à la fin des tâches longues (nécessite le module `BurntToast`, qu'il essaiera d'installer).
+-   **🔔 Notifications de Bureau :** Le script envoie des notifications de bureau natives sur Windows à la fin des tâches longues (nécessite le module `BurntToast`, qu'il essaiera d'installer).
 
 ### ▶️ Comment Lancer
-1.  Assurez-vous que **PowerShell** (v5.1 ou plus récent) est installé.
+1.  Assurez-vous que **Python 3** et **PowerShell** (v5.1 ou plus récent) sont installés.
 2.  Naviguez jusqu'au répertoire racine du projet dans votre terminal.
 3.  Lancez le script avec :
     ```bash
@@ -271,9 +269,9 @@ Pour les utilisateurs qui préfèrent une interface puissante pilotée par le cl
 1.  Lancez le script.
 2.  Le menu principal apparaîtra. Choisissez une option :
     -   **[1] Convertir un fichier unique :** Il vous sera demandé de fournir un chemin de fichier et de choisir un préréglage.
-    -   **[2] Convertir un dossier :** Il vous sera demandé un chemin de dossier et un préréglage. Vous pourrez ensuite choisir d'activer le "Mode Turbo".
+    -   **[2] Convertir un dossier :** Il vous sera demandé un chemin de dossier et un préréglage.
     -   **[3] Créer un GIF / Miniature :** Un sous-menu vous guidera pour créer un GIF ou une miniature à partir d'une vidéo source.
-    -   **[4] Gérer les préréglages :** Liste les préréglages actuellement disponibles depuis `presets.json`.
+    -   **[4] Voir les préréglages :** Affiche les préréglages actuellement disponibles depuis `presets.json`.
 3.  Suivez les instructions à l'écran. Tous les fichiers de sortie sont placés dans un sous-dossier `converted` créé dans le dossier source.
 
 ---
