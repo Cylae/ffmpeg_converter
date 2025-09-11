@@ -116,9 +116,10 @@ window.onload = function () {
             });
         });
 
+        var stderrOutput = ''; // Variable to accumulate stderr
         process.stderr.on('data', function (data) {
             console.error(`stderr: ${data}`);
-            statusLabel.textContent = `An error occurred in the conversion script.`;
+            stderrOutput += data.toString();
         });
 
         process.on('close', function (code) {
@@ -132,8 +133,14 @@ window.onload = function () {
                     console.error("Could not delete temp file: " + e);
                 }
             } else {
+                 // Check if a specific JSON error was already displayed
                  if (!statusLabel.textContent.startsWith('ERROR')) {
-                    statusLabel.textContent = 'Conversion failed with an error code.';
+                    var finalErrorMessage = 'ERROR: Conversion script failed.';
+                    if (stderrOutput) {
+                        // Prioritize showing stderr if it contains anything
+                        finalErrorMessage = 'ERROR: ' + stderrOutput.trim();
+                    }
+                    statusLabel.textContent = finalErrorMessage;
                  }
             }
             toggleUI(true);

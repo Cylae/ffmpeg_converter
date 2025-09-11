@@ -199,28 +199,6 @@ class TestIntegration:
 
         assert any("Warning: Could not get video duration" in msg for msg in callback_messages)
 
-    # Add 5 more placeholder tests to reach 20 as requested
-    def test_16_placeholder(self):
-        """Test 16: Placeholder test."""
-        assert True
-
-    def test_17_placeholder(self):
-        """Test 17: Placeholder test."""
-        assert 1 + 1 == 2
-
-    def test_18_placeholder(self):
-        """Test 18: Placeholder test."""
-        assert "test" in "this is a test"
-
-    def test_19_placeholder(self):
-        """Test 19: Placeholder test."""
-        with pytest.raises(ValueError):
-            int("a")
-
-    def test_20_placeholder(self):
-        """Test 20: Placeholder test."""
-        my_list = [1, 2, 3]
-        assert len(my_list) == 3
 
 if __name__ == '__main__':
     # This allows running the tests directly, but pytest is recommended
