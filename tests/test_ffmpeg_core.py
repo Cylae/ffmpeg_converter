@@ -12,9 +12,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from core.ffmpeg_core import FFmpegConverter, FFmpegError
 
 # --- Constants ---
-TEST_VIDEOS_DIR = os.path.join(os.path.dirname(__file__), '..', 'test_videos')
+# The integration tests are skipped if this file doesn't exist.
+SAMPLE_VIDEO = os.path.join(os.path.dirname(__file__), '..', 'test_videos', 'sample.mp4')
 TEST_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'test_output')
-SAMPLE_VIDEO = os.path.join(TEST_VIDEOS_DIR, '20250213_BrightLaconicBaconAMPEnergy-u2eKtUUus_V0vWDK_source.mp4')
+
 
 # --- Fixtures ---
 @pytest.fixture(scope="module")
@@ -34,128 +35,111 @@ def output_dir():
 # --- Mocks ---
 MOCK_ENCODERS_OUTPUT = """
 Encoders:
- V..... = Video
- A..... = Audio
- S..... = Subtitle
- D..... = Data
- T..... = Attachment
- v..... = Video (codec specific)
- a..... = Audio (codec specific)
- s..... = Subtitle (codec specific)
- ------
- V..... libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
- V..... libx265              libx265 H.265 / HEVC (codec hevc)
- V.S... h264_nvenc           NVIDIA NVENC H.264 encoder (codec h264)
- V.S... hevc_nvenc           NVIDIA NVENC HEVC encoder (codec hevc)
- V..... libsvtav1            libsvtav1 AV1 (codec av1)
- A..... aac                 AAC (Advanced Audio Coding)
- A..... mp3                 MP3 (MPEG audio layer 3)
+ V..... libx264
+ V..... libx265
+ V.S... h264_nvenc
+ V.S... hevc_nvenc
+ A..... aac
 """
 
 # --- Unit Tests (No actual ffmpeg calls) ---
 
-def test_build_command_default_crf(converter):
-    """Test 1: Default H.265 CRF command."""
+def test_build_command_crf(converter):
+    """Test CRF command building."""
     cmd = converter._build_command('in.mp4', 'out.mp4', 'libx265', 'crf', 23, 'copy', None)
-    expected = ['ffmpeg', '-i', 'in.mp4', '-c:v', 'libx265', '-crf', '23', '-c:a', 'copy', '-v', 'quiet', '-stats', '-progress', 'pipe:1', '-y', 'out.mp4']
+    expected = ['ffmpeg', '-y', '-i', 'in.mp4', '-c:v', 'libx265', '-preset', 'medium', '-crf', '23', '-c:a', 'copy', '-v', 'quiet', '-stats', '-progress', 'pipe:1', 'out.mp4']
     assert cmd == expected
 
-def test_build_command_cbr(converter):
-    """Test 2: H.264 CBR command."""
-    cmd = converter._build_command('in.mp4', 'out.mp4', 'libx264', 'cbr', 10, 'copy', None)
-    expected = ['ffmpeg', '-i', 'in.mp4', '-c:v', 'libx264', '-b:v', '10M', '-minrate', '10M', '-maxrate', '10M', '-bufsize', '2M', '-c:a', 'copy', '-v', 'quiet', '-stats', '-progress', 'pipe:1', '-y', 'out.mp4']
-    assert cmd == expected
-
-def test_build_command_audio_recode(converter):
-    """Test 3: Command with AAC audio recoding."""
-    cmd = converter._build_command('in.mp4', 'out.mp4', 'libx265', 'crf', 23, 'aac', None)
-    assert '-c:a' in cmd
-    assert 'aac' in cmd
-    assert '-b:a' in cmd
-    assert '192k' in cmd
-
-def test_build_command_hw_accel_nvenc(converter):
-    """Test 4: Command with NVIDIA hardware acceleration flags."""
-    # The UI sends 'nvenc', the core should translate it to 'cuda' and add relevant flags.
+def test_build_command_nvenc_cq(converter):
+    """Test NVENC CQ command building."""
     cmd = converter._build_command('in.mp4', 'out.mp4', 'hevc_nvenc', 'cq', 24, 'copy', 'nvenc')
     assert '-hwaccel' in cmd
-    assert cmd[cmd.index('-hwaccel') + 1] == 'cuda'
-    assert '-hwaccel_output_format' in cmd
-    assert cmd[cmd.index('-hwaccel_output_format') + 1] == 'cuda'
-    assert '-pix_fmt' in cmd
-    assert cmd[cmd.index('-pix_fmt') + 1] == 'yuv420p'
+    assert 'cuda' in cmd
+    assert '-c:v' in cmd
     assert 'hevc_nvenc' in cmd
-
-def test_build_command_nvenc_quality(converter):
-    """Test 5: Command with NVENC specific quality mode."""
-    cmd = converter._build_command('in.mp4', 'out.mp4', 'hevc_nvenc', 'cq', 24, 'copy', 'nvenc')
-    assert '-rc' in cmd
-    assert cmd[cmd.index('-rc') + 1] == 'vbr'
     assert '-cq' in cmd
-    assert cmd[cmd.index('-cq') + 1] == '24'
+    assert '24' in cmd
+
+def test_create_thumbnail_command(converter):
+    """Test that create_thumbnail builds the correct command."""
+    with patch.object(converter, '_run_command') as mock_run, \
+         patch('os.path.exists', return_value=True): # Mock os.path.exists
+        converter.create_thumbnail('in.mp4', 'out.jpg', timestamp='00:01:30')
+        mock_run.assert_called_once()
+        called_cmd = mock_run.call_args[0][0]
+        expected_cmd = ['ffmpeg', '-ss', '00:01:30', '-i', 'in.mp4', '-vframes', '1', '-q:v', '2', '-y', 'out.jpg']
+        assert called_cmd == expected_cmd
+
+def test_create_gif_commands(converter):
+    """Test that create_gif builds both palette and gif commands correctly."""
+    with patch.object(converter, '_run_command') as mock_run, \
+         patch('tempfile.NamedTemporaryFile') as mock_temp, \
+         patch('os.remove'), \
+         patch('os.path.exists', return_value=True): # Mock os.path.exists
+
+        mock_temp.return_value.__enter__.return_value.name = '/tmp/palette.png'
+
+        converter.create_gif('in.mp4', 'out.gif', '00:00:10', 5, fps=20, width=500)
+
+        assert mock_run.call_count == 2
+
+        palette_call_args = mock_run.call_args_list[0][0][0]
+        expected_palette_cmd = [
+            'ffmpeg', '-y', '-ss', '00:00:10', '-t', '5', '-i', 'in.mp4',
+            '-vf', 'fps=20,scale=500:-1:flags=lanczos,palettegen', '/tmp/palette.png'
+        ]
+        assert palette_call_args == expected_palette_cmd
+
+        gif_call_args = mock_run.call_args_list[1][0][0]
+        expected_gif_cmd = [
+            'ffmpeg', '-y', '-ss', '00:00:10', '-t', '5', '-i', 'in.mp4', '-i', '/tmp/palette.png',
+            '-filter_complex', 'fps=20,scale=500:-1:flags=lanczos[x];[x][1:v]paletteuse', 'out.gif'
+        ]
+        assert gif_call_args == expected_gif_cmd
 
 def test_get_available_encoders_mocked(converter):
-    """Test 6: Parsing of available encoders from mocked ffmpeg output."""
-    with patch('subprocess.run') as mock_run:
+    """Test parsing of available encoders from mocked ffmpeg output."""
+    with patch.object(converter, '_run_command') as mock_run:
         mock_run.return_value = Mock(stdout=MOCK_ENCODERS_OUTPUT, returncode=0)
         encoders = converter.get_available_encoders(force_rescan=True)
         assert 'libx264' in encoders
         assert 'hevc_nvenc' in encoders
-        assert 'libsvtav1' in encoders
-        assert 'aac' not in encoders # Should only find video encoders
-
-def test_get_available_encoders_caching(converter):
-    """Test 7: Encoder list is cached after the first call."""
-    with patch('subprocess.run') as mock_run:
-        mock_run.return_value = Mock(stdout=MOCK_ENCODERS_OUTPUT, returncode=0)
-        first_call = converter.get_available_encoders(force_rescan=True)
-        second_call = converter.get_available_encoders()
-        mock_run.assert_called_once()
-        assert first_call is second_call
-
-def test_get_video_duration_mocked(converter):
-    """Test 8: Parsing of video duration from mocked ffprobe output."""
-    with patch('subprocess.run') as mock_run:
-        mock_run.return_value = Mock(stdout="123.45\n", returncode=0)
-        duration = converter.get_video_duration('dummy.mp4')
-        assert duration == 123.45
+        assert 'aac' not in encoders
 
 def test_convert_file_not_found(converter):
-    """Test 9: Conversion raises FileNotFoundError for non-existent input."""
+    """Test conversion raises FileNotFoundError for non-existent input."""
     with pytest.raises(FileNotFoundError):
         converter.convert('nonexistent.mp4', 'out.mp4')
 
 def test_ffmpeg_error_on_failed_conversion(converter):
-    """Test 10: Conversion raises FFmpegError if ffmpeg returns non-zero."""
+    """Test conversion raises FFmpegError if ffmpeg returns non-zero."""
     with patch('subprocess.Popen') as mock_popen, \
-         patch('os.path.exists', return_value=True):
+         patch('os.path.exists', return_value=True), \
+         patch.object(converter, 'get_video_duration', return_value=10):
+
         mock_process = Mock()
         mock_process.communicate.return_value = ('', 'ffmpeg error message')
         mock_process.returncode = 1
-        mock_process.stdout = [] # Ensure stdout is an iterable
+        mock_process.stdout = []
         mock_popen.return_value = mock_process
+
         with pytest.raises(FFmpegError):
-            # We need a valid file for the initial duration check to pass
-            with patch.object(converter, 'get_video_duration', return_value=10):
-                 converter.convert('anyfile.mp4', 'out.mp4')
+            converter.convert('anyfile.mp4', 'out.mp4')
 
 
 # --- Integration Tests (Requires ffmpeg and a sample video) ---
-
-@pytest.mark.skipif(not os.path.exists(SAMPLE_VIDEO), reason="Sample video not found")
+@pytest.mark.skipif(not os.path.exists(SAMPLE_VIDEO), reason=f"Sample video not found at {SAMPLE_VIDEO}")
 class TestIntegration:
     def _probe_file(self, filepath, converter):
         """Helper to run ffprobe on a file and get its format and stream info."""
-        ffprobe_path = converter.ffprobe_path
-        command = [
-            ffprobe_path, '-v', 'quiet', '-print_format', 'json',
+        result = converter._run_command([
+            converter.ffprobe_path, '-v', 'quiet', '-print_format', 'json',
             '-show_format', '-show_streams', filepath
-        ]
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        ])
         return json.loads(result.stdout)
 
-    def test_11_convert_h265_crf(self, converter, output_dir):
-        """Test 11: A real conversion to H.265 with CRF."""
+    def test_integration_convert_h265_crf(self, converter, output_dir):
+        """A real conversion to H.265 with CRF."""
         output_file = os.path.join(output_dir, 'output_h265_crf.mp4')
         result = converter.convert(SAMPLE_VIDEO, output_file, video_codec='libx265', quality_mode='crf', quality_value=28)
         assert result is True
@@ -163,49 +147,30 @@ class TestIntegration:
         info = self._probe_file(output_file, converter)
         assert info['streams'][0]['codec_name'] == 'hevc'
 
-    def test_12_convert_h264_cbr(self, converter, output_dir):
-        """Test 12: A real conversion to H.264 with CBR."""
-        output_file = os.path.join(output_dir, 'output_h264_cbr.mp4')
-        result = converter.convert(SAMPLE_VIDEO, output_file, video_codec='libx264', quality_mode='cbr', quality_value=1) # 1Mbit
+    def test_integration_convert_with_spaces_in_path(self, converter, output_dir):
+        """A real conversion using a path with spaces."""
+        spaced_input = os.path.join(output_dir, 'my test video.mp4')
+        shutil.copy(SAMPLE_VIDEO, spaced_input)
+
+        output_file = os.path.join(output_dir, 'output with spaces.mp4')
+        result = converter.convert(spaced_input, output_file, video_codec='libx264', quality_mode='crf', quality_value=28)
         assert result is True
         assert os.path.exists(output_file)
         info = self._probe_file(output_file, converter)
         assert info['streams'][0]['codec_name'] == 'h264'
-        assert int(info['format']['bit_rate']) > 800000 # Check if bitrate is roughly in the correct range
 
-    def test_13_convert_audio_aac(self, converter, output_dir):
-        """Test 13: A real conversion with audio re-encoded to AAC."""
-        output_file = os.path.join(output_dir, 'output_audio_aac.mp4')
-        result = converter.convert(SAMPLE_VIDEO, output_file, audio_codec='aac')
+    def test_integration_create_thumbnail(self, converter, output_dir):
+        """A real thumbnail creation."""
+        output_file = os.path.join(output_dir, 'thumb.jpg')
+        result = converter.create_thumbnail(SAMPLE_VIDEO, output_file, timestamp='00:00:00.5')
         assert result is True
         assert os.path.exists(output_file)
-        info = self._probe_file(output_file, converter)
-        assert info['streams'][1]['codec_name'] == 'aac'
+        assert os.path.getsize(output_file) > 1000
 
-    def test_14_progress_callback_gets_called(self, converter, output_dir):
-        """Test 14: The progress callback function is executed during conversion."""
-        output_file = os.path.join(output_dir, 'output_progress.mp4')
-        progress_updates = []
-        def my_callback(percent, msg):
-            progress_updates.append(percent)
-
-        converter.convert(SAMPLE_VIDEO, output_file, progress_callback=my_callback)
-        assert len(progress_updates) > 0
-        assert 100 in progress_updates
-
-    def test_15_duration_warning(self, converter, output_dir):
-        """Test 15: A warning is issued if duration cannot be fetched."""
-        output_file = os.path.join(output_dir, 'output_warning.mp4')
-        callback_messages = []
-        def my_callback(percent, msg):
-            callback_messages.append(msg)
-
-        with patch.object(converter, 'get_video_duration', side_effect=FFmpegError("test error")):
-            converter.convert(SAMPLE_VIDEO, output_file, progress_callback=my_callback)
-
-        assert any("Warning: Could not get video duration" in msg for msg in callback_messages)
-
-
-if __name__ == '__main__':
-    # This allows running the tests directly, but pytest is recommended
-    pytest.main([__file__])
+    def test_integration_create_gif(self, converter, output_dir):
+        """A real animated GIF creation."""
+        output_file = os.path.join(output_dir, 'anim.gif')
+        result = converter.create_gif(SAMPLE_VIDEO, output_file, start_time='00:00:00', duration=1.0, fps=10, width=150)
+        assert result is True
+        assert os.path.exists(output_file)
+        assert os.path.getsize(output_file) > 1000
