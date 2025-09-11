@@ -5,6 +5,7 @@ import sys
 import threading
 import queue
 import platform
+import re
 
 # Add the parent directory to the path to find the core module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -22,6 +23,7 @@ class App(tk.Tk):
         self.files_to_convert = []
         self.progress_queue = queue.Queue()
         self.is_converting = False
+        self.available_encoders = [] # To store available encoders
 
         # --- UI Styling ---
         style = ttk.Style(self)
@@ -70,6 +72,7 @@ class App(tk.Tk):
         self.hw_accel = tk.StringVar(value="None")
         self.hw_accel_combo = ttk.Combobox(options_frame, textvariable=self.hw_accel, state="readonly")
         self.hw_accel_combo.grid(row=0, column=3, sticky="ew", padx=5)
+        self.hw_accel_combo.bind("<<ComboboxSelected>>", self.update_codecs_for_hw_accel)
 
         ttk.Label(options_frame, text="Quality Mode:").grid(row=1, column=0, sticky="w")
         self.quality_mode = tk.StringVar(value="crf")
@@ -116,13 +119,13 @@ class App(tk.Tk):
 
     def _populate_hw_accel_worker(self):
         try:
-            encoders = self.converter.get_available_encoders()
+            self.available_encoders = self.converter.get_available_encoders()
             hw_options = ["None"]
-            if any("nvenc" in e for e in encoders):
+            if any("nvenc" in e for e in self.available_encoders):
                 hw_options.append("NVIDIA (nvenc)")
-            if any("qsv" in e for e in encoders):
+            if any("qsv" in e for e in self.available_encoders):
                 hw_options.append("Intel (qsv)")
-            if any("videotoolbox" in e for e in encoders):
+            if any("videotoolbox" in e for e in self.available_encoders):
                 hw_options.append("Apple (videotoolbox)")
             self.progress_queue.put(("HW_ACCEL", hw_options))
         except (FFmpegError, FileNotFoundError) as e:
@@ -181,6 +184,37 @@ class App(tk.Tk):
             self.quality_label.config(text="Bitrate (Mbps):")
             self.quality_value.set("10")
 
+    def update_codecs_for_hw_accel(self, event=None):
+        """Dynamically update the list of available codecs based on HW accel selection."""
+        selected_hw = self.hw_accel.get()
+        new_codecs = []
+
+        if "None" in selected_hw:
+            new_codecs = ["H.265 (libx265)", "H.264 (libx264)", "AV1 (libsvtav1)"]
+        elif "NVIDIA" in selected_hw:
+            if "hevc_nvenc" in self.available_encoders:
+                new_codecs.append("H.265 (hevc_nvenc)")
+            if "h264_nvenc" in self.available_encoders:
+                new_codecs.append("H.264 (h264_nvenc)")
+        elif "Intel" in selected_hw:
+            if "hevc_qsv" in self.available_encoders:
+                new_codecs.append("H.265 (hevc_qsv)")
+            if "h264_qsv" in self.available_encoders:
+                new_codecs.append("H.264 (h264_qsv)")
+        elif "Apple" in selected_hw:
+            if "hevc_videotoolbox" in self.available_encoders:
+                new_codecs.append("H.265 (hevc_videotoolbox)")
+            if "h264_videotoolbox" in self.available_encoders:
+                new_codecs.append("H.264 (h264_videotoolbox)")
+
+        if new_codecs:
+            self.codec_combo['values'] = new_codecs
+            self.video_codec.set(new_codecs[0])
+        else:
+            # Fallback if no specific codecs found for the HW accel
+            self.codec_combo['values'] = ["H.265 (libx265)", "H.264 (libx264)", "AV1 (libsvtav1)"]
+            self.video_codec.set(new_codecs[0])
+
     def start_export(self):
         if not self.files_to_convert:
             messagebox.showerror("Error", "The file queue is empty.")
@@ -196,8 +230,14 @@ class App(tk.Tk):
         self.toggle_ui_state(tk.DISABLED)
         self.progress_bar['value'] = 0
 
+        # The codec string can now be e.g. "H.265 (hevc_nvenc)", so we parse it
+        codec_selection = self.video_codec.get()
+        codec_match = re.search(r'\((\S+)\)', codec_selection)
+        video_codec_val = codec_match.group(1) if codec_match else "libx265"
+
+
         conversion_options = {
-            'video_codec': self.video_codec.get().split(" ")[-1].strip("()"),
+            'video_codec': video_codec_val,
             'quality_mode': self.quality_mode.get().lower(),
             'quality_value': quality_val,
             'audio_codec': 'aac' if 'AAC' in self.audio_codec.get() else 'copy',
