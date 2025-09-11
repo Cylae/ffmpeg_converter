@@ -163,7 +163,7 @@ class FFmpegConverter:
 
             if 'out_time_ms' in progress_data and duration_s > 0:
                 elapsed_ms = int(progress_data['out_time_ms'])
-                percentage = min(100, int((elapsed_ms / (duration_s * 1_000_000)))))
+                percentage = min(100, int((elapsed_ms / (duration_s * 1_000_000))))
                 # Create a human-readable message
                 message = (f"frame={progress_data.get('frame', 'N/A')} | "
                            f"bitrate={progress_data.get('bitrate', 'N/A')} | "
