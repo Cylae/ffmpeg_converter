@@ -53,6 +53,21 @@ The standalone app provides a robust interface for converting multiple files wit
 3.  **Set Encoding Options:** Select your desired video codec, hardware acceleration, quality mode, and audio settings.
 4.  **Start Conversion:** Click **"Start Conversion"**. The progress of the current file will be displayed.
 
+### 📦 How to Build an Executable
+For convenience, you can package the standalone application into a single `.exe` file. This allows you to run it on other Windows machines without needing to have Python installed (though FFmpeg is still required).
+
+1.  Ensure you have **Python 3** installed.
+2.  Install the necessary packaging tool:
+    ```bash
+    pip install pyinstaller
+    ```
+3.  Navigate to the project's root directory in your terminal.
+4.  Run the build script:
+    ```bash
+    python3 build.py
+    ```
+5.  If successful, the executable will be located in the `/dist` folder, named `Advanced Video Converter.exe`.
+
 ---
 
 ## 🔌 3. Premiere Pro Plugin
@@ -168,6 +183,21 @@ L'application autonome fournit une interface robuste pour convertir plusieurs fi
 2.  **Choisissez la Destination :** Cliquez sur **"Browse..."** pour sélectionner un dossier pour les fichiers de sortie.
 3.  **Réglez les Options d'Encodage :** Sélectionnez le codec vidéo, l'accélération matérielle, le mode de qualité et les paramètres audio souhaités.
 4.  **Lancez la Conversion :** Cliquez sur **"Start Conversion"**. La progression du fichier actuel sera affichée.
+
+### 📦 Comment Créer un Exécutable
+Pour plus de commodité, vous pouvez empaqueter l'application autonome dans un unique fichier `.exe`. Cela vous permet de l'exécuter sur d'autres machines Windows sans avoir besoin d'installer Python (bien que FFmpeg soit toujours requis).
+
+1.  Assurez-vous que Python 3 est installé.
+2.  Installez l'outil d'empaquetage nécessaire :
+    ```bash
+    pip install pyinstaller
+    ```
+3.  Naviguez jusqu'au répertoire racine du projet dans votre terminal.
+4.  Lancez le script de build :
+    ```bash
+    python3 build.py
+    ```
+5.  En cas de succès, l'exécutable se trouvera dans le dossier `/dist` sous le nom `Advanced Video Converter.exe`.
 
 ---
 
