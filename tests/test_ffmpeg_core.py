@@ -57,12 +57,14 @@ Encoders:
 def test_build_command_default_crf(converter):
     """Test 1: Default H.265 CRF command."""
     cmd = converter._build_command('in.mp4', 'out.mp4', 'libx265', 'crf', 23, 'copy', None)
-    assert cmd == ['ffmpeg', '-i', 'in.mp4', '-c:v', 'libx265', '-crf', '23', '-c:a', 'copy', '-y', 'out.mp4']
+    expected = ['ffmpeg', '-i', 'in.mp4', '-c:v', 'libx265', '-crf', '23', '-c:a', 'copy', '-v', 'quiet', '-stats', '-progress', 'pipe:1', '-y', 'out.mp4']
+    assert cmd == expected
 
 def test_build_command_cbr(converter):
     """Test 2: H.264 CBR command."""
     cmd = converter._build_command('in.mp4', 'out.mp4', 'libx264', 'cbr', 10, 'copy', None)
-    assert cmd == ['ffmpeg', '-i', 'in.mp4', '-c:v', 'libx264', '-b:v', '10M', '-minrate', '10M', '-maxrate', '10M', '-bufsize', '2M', '-c:a', 'copy', '-y', 'out.mp4']
+    expected = ['ffmpeg', '-i', 'in.mp4', '-c:v', 'libx264', '-b:v', '10M', '-minrate', '10M', '-maxrate', '10M', '-bufsize', '2M', '-c:a', 'copy', '-v', 'quiet', '-stats', '-progress', 'pipe:1', '-y', 'out.mp4']
+    assert cmd == expected
 
 def test_build_command_audio_recode(converter):
     """Test 3: Command with AAC audio recoding."""
@@ -119,15 +121,17 @@ def test_convert_file_not_found(converter):
 
 def test_ffmpeg_error_on_failed_conversion(converter):
     """Test 10: Conversion raises FFmpegError if ffmpeg returns non-zero."""
-    with patch('subprocess.Popen') as mock_popen:
+    with patch('subprocess.Popen') as mock_popen, \
+         patch('os.path.exists', return_value=True):
         mock_process = Mock()
+        mock_process.communicate.return_value = ('', 'ffmpeg error message')
         mock_process.returncode = 1
-        mock_process.stderr = []
+        mock_process.stdout = [] # Ensure stdout is an iterable
         mock_popen.return_value = mock_process
         with pytest.raises(FFmpegError):
             # We need a valid file for the initial duration check to pass
             with patch.object(converter, 'get_video_duration', return_value=10):
-                 converter.convert(SAMPLE_VIDEO, 'out.mp4')
+                 converter.convert('anyfile.mp4', 'out.mp4')
 
 
 # --- Integration Tests (Requires ffmpeg and a sample video) ---
