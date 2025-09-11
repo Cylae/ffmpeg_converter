@@ -177,12 +177,52 @@ class App(tk.Tk):
             self.output_dir.set(folderpath)
 
     def update_ui_for_mode(self, event=None):
-        if self.quality_mode.get() == "CRF":
+        mode = self.quality_mode.get()
+        if mode == "CRF":
             self.quality_label.config(text="CRF Value (18-28):")
             self.quality_value.set("23")
-        else: # CBR
+        elif mode == "CBR":
             self.quality_label.config(text="Bitrate (Mbps):")
             self.quality_value.set("10")
+        elif mode == "CQ":
+            self.quality_label.config(text="CQ Value (0-51):")
+            self.quality_value.set("24")
+
+    def update_codecs_for_hw_accel(self, event=None):
+        """Dynamically update the list of available codecs and quality modes based on HW accel selection."""
+        selected_hw = self.hw_accel.get()
+        new_codecs = []
+        new_modes = []
+
+        if "None" in selected_hw:
+            new_codecs = ["H.265 (libx265)", "H.264 (libx264)", "AV1 (libsvtav1)"]
+            new_modes = ["CRF", "CBR"]
+        else:
+            # Hardware acceleration is selected
+            new_modes = ["CQ", "CBR"]
+            if "NVIDIA" in selected_hw:
+                if "hevc_nvenc" in self.available_encoders: new_codecs.append("H.265 (hevc_nvenc)")
+                if "h264_nvenc" in self.available_encoders: new_codecs.append("H.264 (h264_nvenc)")
+            elif "Intel" in selected_hw:
+                if "hevc_qsv" in self.available_encoders: new_codecs.append("H.265 (hevc_qsv)")
+                if "h264_qsv" in self.available_encoders: new_codecs.append("H.264 (h264_qsv)")
+            elif "Apple" in selected_hw:
+                if "hevc_videotoolbox" in self.available_encoders: new_codecs.append("H.265 (hevc_videotoolbox)")
+                if "h264_videotoolbox" in self.available_encoders: new_codecs.append("H.264 (h264_videotoolbox)")
+
+        # Update codec dropdown
+        if new_codecs:
+            self.codec_combo['values'] = new_codecs
+            self.video_codec.set(new_codecs[0])
+        else:
+            # Fallback if no specific codecs found for the HW accel
+            self.codec_combo['values'] = ["H.265 (libx265)", "H.264 (libx264)"]
+            self.video_codec.set("H.265 (libx265)")
+
+        # Update quality mode dropdown
+        self.mode_combo['values'] = new_modes
+        self.quality_mode.set(new_modes[0])
+        self.update_ui_for_mode() # Manually trigger a UI update for the label/value
 
     def update_codecs_for_hw_accel(self, event=None):
         """Dynamically update the list of available codecs based on HW accel selection."""
