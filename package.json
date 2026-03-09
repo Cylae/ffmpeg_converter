@@ -4,7 +4,7 @@
   "description": "Premiere Pro panel for FFmpeg conversion",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"No JS tests specified\" && exit 0"
   },
   "author": "",
   "license": "ISC"
