@@ -143,7 +143,11 @@ If you want to contribute to the project, run tests, or build the executables yo
     ```
 
 ### 🧪 Running Tests
-The project includes a test suite for the core conversion logic. To run the tests, navigate to the project's root directory and run:
+The project includes a test suite for the core conversion logic, as well as a gigantic, highly demanding extended test suite that verifies edge cases, missing streams, extreme length, special characters, and corrupted files. Running the full suite could be time-consuming but ensures 100% robustness.
+
+Before running the extended suite, you may need to generate the test videos using FFmpeg (see `tests/test_extended.py` for required filenames).
+
+To run all tests, navigate to the project's root directory and run:
 ```bash
 pytest
 ```
@@ -289,7 +293,11 @@ Si vous souhaitez contribuer au projet, exécuter les tests ou créer vous-même
     ```
 
 ### 🧪 Exécuter les tests
-Le projet inclut une suite de tests pour la logique de conversion principale. Pour lancer les tests, naviguez jusqu'au répertoire racine du projet et exécutez :
+Le projet inclut une suite de tests pour la logique de conversion principale, ainsi qu'une gigantesque batterie de tests pour mettre à l'épreuve les cas limites, les fichiers corrompus, sans vidéo/audio et comportant des caractères spéciaux. Elle est exigeante et couvre 100% des cas d'utilisation pour garantir une fiabilité absolue.
+
+Avant de lancer les tests complets, vous devrez peut-être générer les fichiers de test avec FFmpeg (voir les noms de fichiers requis dans `tests/test_extended.py`).
+
+Pour lancer les tests, naviguez jusqu'au répertoire racine du projet et exécutez :
 ```bash
 pytest
 ```

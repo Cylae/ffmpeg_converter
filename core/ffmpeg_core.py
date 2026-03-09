@@ -76,8 +76,13 @@ class FFmpegConverter:
             '-of', 'default=noprint_wrappers=1:nokey=1', input_path
         ]
         result = self._run_command(command)
+        output = result.stdout.strip()
+
+        if output == 'N/A' or output == '':
+            return 0.0
+
         try:
-            return float(result.stdout.strip())
+            return float(output)
         except (ValueError, TypeError):
             raise FFmpegError(f"Could not parse video duration from ffprobe output: '{result.stdout}'")
 
@@ -228,13 +233,16 @@ class FFmpegConverter:
                 progress_data[parts[0]] = parts[1]
 
             if 'out_time_ms' in progress_data and duration_s > 0:
-                elapsed_ms = int(progress_data['out_time_ms'])
-                percentage = min(100, int((elapsed_ms / (duration_s * 1_000_000))))
-                message = (f"frame={progress_data.get('frame', 'N/A')} | "
-                           f"bitrate={progress_data.get('bitrate', 'N/A')} | "
-                           f"speed={progress_data.get('speed', 'N/A')}")
-                if progress_callback:
-                    progress_callback(percentage, message)
+                out_time_str = progress_data['out_time_ms']
+                if out_time_str != 'N/A' and out_time_str.lstrip('-').isdigit():
+                    elapsed_ms = int(out_time_str)
+                    if elapsed_ms >= 0:
+                        percentage = min(100, int((elapsed_ms / (duration_s * 1_000_000))))
+                        message = (f"frame={progress_data.get('frame', 'N/A')} | "
+                                   f"bitrate={progress_data.get('bitrate', 'N/A')} | "
+                                   f"speed={progress_data.get('speed', 'N/A')}")
+                        if progress_callback:
+                            progress_callback(percentage, message)
 
         _, stderr_output = process.communicate()
 
